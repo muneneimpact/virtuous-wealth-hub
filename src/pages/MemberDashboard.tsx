@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Wallet,
@@ -10,15 +10,20 @@ import {
   ArrowDownRight,
   Users,
   Calendar,
+  Send,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import StatsCard from "@/components/dashboard/StatsCard";
 import ProgressCard from "@/components/dashboard/ProgressCard";
+import FinancialOverview from "@/components/dashboard/FinancialOverview";
+import LoanRequestModal from "@/components/member/LoanRequestModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 const MemberDashboard = () => {
   const navigate = useNavigate();
+  const [loanModalOpen, setLoanModalOpen] = useState(false);
 
   useEffect(() => {
     const user = localStorage.getItem("user");
@@ -34,6 +39,8 @@ const MemberDashboard = () => {
 
   // Mock data - will be replaced with real data from backend
   const memberData = {
+    id: 1,
+    name: "John Mwangi",
     totalInvested: 28000,
     monthlyContribution: 2000,
     monthsPaid: 14,
@@ -41,8 +48,30 @@ const MemberDashboard = () => {
     arrears: 0,
     loanBalance: 15000,
     loanInterest: 750,
-    loanEligibility: 50000,
     repaymentProgress: 65,
+  };
+
+  // Loan eligibility: 5x contribution
+  const loanEligibility = memberData.totalInvested * 5;
+
+  // All members for guarantor selection
+  const allMembers = [
+    { id: 1, name: "John Mwangi", totalInvested: 28000, loanBalance: 15000 },
+    { id: 2, name: "Mary Wanjiku", totalInvested: 32000, loanBalance: 0 },
+    { id: 3, name: "James Kamau", totalInvested: 26000, loanBalance: 25000 },
+    { id: 4, name: "Grace Akinyi", totalInvested: 30000, loanBalance: 20000 },
+    { id: 5, name: "Peter Ochieng", totalInvested: 28000, loanBalance: 0 },
+    { id: 6, name: "Susan Njeri", totalInvested: 24000, loanBalance: 10000 },
+  ];
+
+  // Group financial data
+  const groupFinancials = {
+    totalInvestments: 168000,
+    totalLoansGiven: 70000,
+    totalExpectedAfterLoans: 168000 + (70000 * 0.05), // Principal + 5% interest
+    availableBalance: 98000, // totalInvestments - totalLoansGiven
+    minimumBalance: 50000,
+    interestRate: 5,
   };
 
   const transactions = [
@@ -64,9 +93,11 @@ const MemberDashboard = () => {
     },
   ];
 
-  const groupProgress = {
-    current: 280000,
-    target: 2000000,
+  const pendingLoanRequest = null; // Will show if member has pending request
+
+  const handleLoanRequest = (request: { amount: number; guarantors: any[] }) => {
+    console.log("Loan request submitted:", request);
+    // This would send to backend
   };
 
   return (
@@ -75,10 +106,22 @@ const MemberDashboard = () => {
       subtitle="Welcome back, here's your investment summary"
       role="member"
     >
+      {/* Financial Overview - Visible to all members */}
+      <div className="mb-8">
+        <FinancialOverview
+          totalInvestments={groupFinancials.totalInvestments}
+          totalLoansGiven={groupFinancials.totalLoansGiven}
+          totalExpectedAfterLoans={groupFinancials.totalExpectedAfterLoans}
+          availableBalance={groupFinancials.availableBalance}
+          minimumBalance={groupFinancials.minimumBalance}
+          interestRate={groupFinancials.interestRate}
+        />
+      </div>
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatsCard
-          title="Total Invested"
+          title="My Savings"
           value={`KES ${memberData.totalInvested.toLocaleString()}`}
           subtitle={`${memberData.monthsPaid} months paid`}
           icon={Wallet}
@@ -88,14 +131,14 @@ const MemberDashboard = () => {
         <StatsCard
           title="Loan Balance"
           value={`KES ${memberData.loanBalance.toLocaleString()}`}
-          subtitle={`+KES ${memberData.loanInterest} interest`}
+          subtitle={`+KES ${memberData.loanInterest}/mo interest`}
           icon={CreditCard}
           variant={memberData.loanBalance > 0 ? "warning" : "success"}
         />
         <StatsCard
-          title="Loan Eligibility"
-          value={`KES ${memberData.loanEligibility.toLocaleString()}`}
-          subtitle="Maximum you can borrow"
+          title="Max Loan (5x Savings)"
+          value={`KES ${loanEligibility.toLocaleString()}`}
+          subtitle="Your borrowing limit"
           icon={TrendingUp}
           variant="default"
         />
@@ -108,14 +151,58 @@ const MemberDashboard = () => {
         />
       </div>
 
+      {/* Request Loan Button */}
+      {memberData.loanBalance === 0 && (
+        <div className="mb-8">
+          <Card variant="bordered" className="bg-gradient-to-r from-primary/5 to-accent/5">
+            <CardContent className="py-6">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-display text-xl font-semibold mb-1">Need a Loan?</h3>
+                  <p className="text-muted-foreground">
+                    You can borrow up to KES {loanEligibility.toLocaleString()} (5x your savings). 
+                    Select guarantors who agreed to back your loan.
+                  </p>
+                </div>
+                <Button variant="gold" size="lg" onClick={() => setLoanModalOpen(true)}>
+                  <Send className="w-5 h-5 mr-2" />
+                  Request Loan
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Pending Loan Request Status */}
+      {pendingLoanRequest && (
+        <div className="mb-8">
+          <Card variant="gold">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-warning/20">
+                  <AlertCircle className="w-5 h-5 text-warning" />
+                </div>
+                <div>
+                  <p className="font-medium">Loan Request Pending</p>
+                  <p className="text-sm text-muted-foreground">
+                    Your loan request is awaiting Treasurer approval
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Left Column */}
         <div className="lg:col-span-2 space-y-8">
           {/* Group Progress */}
           <ProgressCard
             title="Group Investment Progress"
-            current={groupProgress.current}
-            target={groupProgress.target}
+            current={groupFinancials.totalInvestments}
+            target={2000000}
           />
 
           {/* Recent Transactions */}
@@ -125,7 +212,7 @@ const MemberDashboard = () => {
               <Badge variant="secondary">{transactions.length} this month</Badge>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {transactions.map((transaction) => (
                   <div
                     key={transaction.id}
@@ -133,7 +220,7 @@ const MemberDashboard = () => {
                   >
                     <div className="flex items-center gap-4">
                       <div
-                        className={`p-2 rounded-lg ${
+                        className={`p-2.5 rounded-xl ${
                           transaction.amount > 0
                             ? "bg-success/10 text-success"
                             : "bg-accent/10 text-accent"
@@ -160,7 +247,7 @@ const MemberDashboard = () => {
                     </div>
                     <div className="text-right">
                       <p
-                        className={`font-semibold ${
+                        className={`font-semibold text-lg ${
                           transaction.amount > 0 ? "text-success" : "text-accent"
                         }`}
                       >
@@ -184,32 +271,32 @@ const MemberDashboard = () => {
         {/* Right Column */}
         <div className="space-y-8">
           {/* Payment Schedule */}
-          <Card variant="bordered">
+          <Card variant="elevated">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-primary" />
+                <Calendar className="w-5 h-5 text-accent" />
                 Payment Schedule
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="p-4 rounded-xl bg-accent/10 border border-accent/20">
+                <div className="p-4 rounded-xl bg-gradient-to-br from-accent/10 to-accent/5 border border-accent/20">
                   <p className="text-sm text-muted-foreground mb-1">Next Payment Due</p>
                   <p className="font-display text-xl font-bold">January 1, 2025</p>
                   <p className="text-accent font-semibold mt-2">
                     KES {memberData.monthlyContribution.toLocaleString()}
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-4 text-center">
-                  <div className="p-3 rounded-lg bg-muted">
-                    <p className="text-2xl font-bold text-success">{memberData.monthsPaid}</p>
-                    <p className="text-xs text-muted-foreground">Months Paid</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 rounded-xl bg-success/5 border border-success/10 text-center">
+                    <p className="text-3xl font-display font-bold text-success">{memberData.monthsPaid}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Months Paid</p>
                   </div>
-                  <div className="p-3 rounded-lg bg-muted">
-                    <p className="text-2xl font-bold text-muted-foreground">
+                  <div className="p-4 rounded-xl bg-muted text-center">
+                    <p className="text-3xl font-display font-bold text-muted-foreground">
                       {memberData.monthsUnpaid}
                     </p>
-                    <p className="text-xs text-muted-foreground">Unpaid</p>
+                    <p className="text-xs text-muted-foreground mt-1">Unpaid</p>
                   </div>
                 </div>
               </div>
@@ -217,18 +304,18 @@ const MemberDashboard = () => {
           </Card>
 
           {/* Guarantorship */}
-          <Card variant="bordered">
+          <Card variant="elevated">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-primary" />
-                Guarantorship
+                My Guarantorships
               </CardTitle>
             </CardHeader>
             <CardContent>
               {guarantorships.length > 0 ? (
                 <div className="space-y-4">
                   {guarantorships.map((g) => (
-                    <div key={g.id} className="p-4 rounded-xl bg-muted/50">
+                    <div key={g.id} className="p-4 rounded-xl bg-muted/50 border">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm text-muted-foreground">
                           {g.type === "given" ? "You guaranteed" : "Guaranteed by"}
@@ -237,25 +324,56 @@ const MemberDashboard = () => {
                           {g.status}
                         </Badge>
                       </div>
-                      <p className="font-medium">{g.member}</p>
-                      <div className="flex justify-between mt-2 text-sm">
-                        <span className="text-muted-foreground">Loan: KES {g.loanAmount.toLocaleString()}</span>
-                        <span className="text-warning">
-                          Remaining: KES {g.remaining.toLocaleString()}
-                        </span>
+                      <p className="font-semibold">{g.member}</p>
+                      <div className="mt-3 pt-3 border-t">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Loan Amount</span>
+                          <span className="font-medium">KES {g.loanAmount.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-sm mt-1">
+                          <span className="text-muted-foreground">Remaining</span>
+                          <span className="text-warning font-medium">
+                            KES {g.remaining.toLocaleString()}
+                          </span>
+                        </div>
+                        {/* Progress bar */}
+                        <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-success rounded-full"
+                            style={{ width: `${((g.loanAmount - g.remaining) / g.loanAmount) * 100}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 text-right">
+                          {(((g.loanAmount - g.remaining) / g.loanAmount) * 100).toFixed(0)}% repaid
+                        </p>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground text-center py-4">
-                  No active guarantorships
-                </p>
+                <div className="text-center py-6 text-muted-foreground">
+                  <Users className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                  <p>No active guarantorships</p>
+                </div>
               )}
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* Loan Request Modal */}
+      <LoanRequestModal
+        open={loanModalOpen}
+        onOpenChange={setLoanModalOpen}
+        currentMember={{
+          id: memberData.id,
+          name: memberData.name,
+          totalInvested: memberData.totalInvested,
+          loanBalance: memberData.loanBalance,
+        }}
+        allMembers={allMembers}
+        onSubmitRequest={handleLoanRequest}
+      />
     </DashboardLayout>
   );
 };
