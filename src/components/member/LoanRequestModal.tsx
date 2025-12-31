@@ -49,8 +49,9 @@ const LoanRequestModal = ({
   const [guarantorAmounts, setGuarantorAmounts] = useState<Record<number, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Loan eligibility: Max 5x contribution
-  const maxLoanAmount = currentMember.totalInvested * 5;
+  // Loan eligibility: Max 5x contribution minus existing loans
+  const maxLoanEligibility = currentMember.totalInvested * 5;
+  const maxLoanAmount = maxLoanEligibility - currentMember.loanBalance;
   
   // Required guarantee: 80% of loan amount
   const requiredGuarantee = parseFloat(loanAmount) * 0.8 || 0;
@@ -155,18 +156,21 @@ const LoanRequestModal = ({
                 <p className="font-semibold">KES {currentMember.totalInvested.toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Max Loan (5x)</p>
-                <p className="font-semibold text-accent">KES {maxLoanAmount.toLocaleString()}</p>
+                <p className="text-muted-foreground">Max Eligible (5x)</p>
+                <p className="font-semibold">KES {maxLoanEligibility.toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Current Loan</p>
                 <p className="font-semibold">KES {currentMember.loanBalance.toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Interest Rate</p>
-                <p className="font-semibold">5% /month</p>
+                <p className="text-muted-foreground">Available to Borrow</p>
+                <p className="font-semibold text-accent">KES {maxLoanAmount.toLocaleString()}</p>
               </div>
             </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Interest Rate: 5% per month
+            </p>
           </div>
 
           {/* Loan Amount */}

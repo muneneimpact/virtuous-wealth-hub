@@ -51,8 +51,10 @@ const MemberDashboard = () => {
     repaymentProgress: 65,
   };
 
-  // Loan eligibility: 5x contribution
-  const loanEligibility = memberData.totalInvested * 5;
+  // Loan eligibility: 5x contribution minus existing loans
+  const maxLoanEligibility = memberData.totalInvested * 5;
+  const remainingBorrowingCapacity = maxLoanEligibility - memberData.loanBalance;
+  const canRequestLoan = remainingBorrowingCapacity > 0;
 
   // All members for guarantor selection
   const allMembers = [
@@ -136,11 +138,11 @@ const MemberDashboard = () => {
           variant={memberData.loanBalance > 0 ? "warning" : "success"}
         />
         <StatsCard
-          title="Max Loan (5x Savings)"
-          value={`KES ${loanEligibility.toLocaleString()}`}
-          subtitle="Your borrowing limit"
+          title="Available to Borrow"
+          value={`KES ${remainingBorrowingCapacity.toLocaleString()}`}
+          subtitle={`Max: KES ${maxLoanEligibility.toLocaleString()}`}
           icon={TrendingUp}
-          variant="default"
+          variant={remainingBorrowingCapacity > 0 ? "default" : "warning"}
         />
         <StatsCard
           title="Arrears"
@@ -152,15 +154,18 @@ const MemberDashboard = () => {
       </div>
 
       {/* Request Loan Button */}
-      {memberData.loanBalance === 0 && (
+      {canRequestLoan && (
         <div className="mb-8">
           <Card variant="bordered" className="bg-gradient-to-r from-primary/5 to-accent/5">
             <CardContent className="py-6">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div>
-                  <h3 className="font-display text-xl font-semibold mb-1">Need a Loan?</h3>
+                  <h3 className="font-display text-xl font-semibold mb-1">
+                    {memberData.loanBalance > 0 ? "Need More Funds?" : "Need a Loan?"}
+                  </h3>
                   <p className="text-muted-foreground">
-                    You can borrow up to KES {loanEligibility.toLocaleString()} (5x your savings). 
+                    You can borrow up to KES {remainingBorrowingCapacity.toLocaleString()} more
+                    {memberData.loanBalance > 0 && ` (Current loan: KES ${memberData.loanBalance.toLocaleString()})`}. 
                     Select guarantors who agreed to back your loan.
                   </p>
                 </div>
