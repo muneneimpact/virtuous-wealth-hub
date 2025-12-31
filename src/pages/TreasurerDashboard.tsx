@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Wallet,
   Users,
@@ -8,7 +8,6 @@ import {
   AlertTriangle,
   PlusCircle,
   Search,
-  Filter,
   MoreHorizontal,
   Eye,
   Edit,
@@ -21,6 +20,9 @@ import {
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import StatsCard from "@/components/dashboard/StatsCard";
 import ProgressCard from "@/components/dashboard/ProgressCard";
+import LoanProcessingModal from "@/components/treasurer/LoanProcessingModal";
+import MemberUpdateModal from "@/components/treasurer/MemberUpdateModal";
+import SettingsPanel from "@/components/treasurer/SettingsPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,11 +41,32 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+
+interface Member {
+  id: number;
+  name: string;
+  email: string;
+  totalInvested: number;
+  arrears: number;
+  loanBalance: number;
+  status: string;
+}
 
 const TreasurerDashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
+  const [loanModalOpen, setLoanModalOpen] = useState(false);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  
+  // Settings state
+  const [interestRate, setInterestRate] = useState(5);
+  const [investmentTarget, setInvestmentTarget] = useState(5000000);
+
+  // Check if we're on the settings page
+  const isSettingsPage = location.pathname === "/treasurer/settings";
 
   useEffect(() => {
     const user = localStorage.getItem("user");
@@ -58,22 +81,22 @@ const TreasurerDashboard = () => {
   }, [navigate]);
 
   // Mock data
-  const stats = {
-    totalFunds: 2800000,
-    totalLoansIssued: 450000,
-    totalArrears: 24000,
-    activeMembers: 10,
-    collectionRate: 96,
-  };
-
-  const members = [
+  const [members, setMembers] = useState<Member[]>([
     { id: 1, name: "John Mwangi", email: "john@example.com", totalInvested: 28000, arrears: 0, loanBalance: 15000, status: "active" },
     { id: 2, name: "Mary Wanjiku", email: "mary@example.com", totalInvested: 32000, arrears: 0, loanBalance: 0, status: "active" },
     { id: 3, name: "James Kamau", email: "james@example.com", totalInvested: 26000, arrears: 4000, loanBalance: 25000, status: "arrears" },
     { id: 4, name: "Grace Akinyi", email: "grace@example.com", totalInvested: 30000, arrears: 0, loanBalance: 20000, status: "active" },
     { id: 5, name: "Peter Ochieng", email: "peter@example.com", totalInvested: 28000, arrears: 0, loanBalance: 0, status: "active" },
     { id: 6, name: "Susan Njeri", email: "susan@example.com", totalInvested: 24000, arrears: 2000, loanBalance: 10000, status: "arrears" },
-  ];
+  ]);
+
+  const stats = {
+    totalFunds: members.reduce((sum, m) => sum + m.totalInvested, 0),
+    totalLoansIssued: members.reduce((sum, m) => sum + m.loanBalance, 0),
+    totalArrears: members.reduce((sum, m) => sum + m.arrears, 0),
+    activeMembers: members.length,
+    collectionRate: 96,
+  };
 
   const monthlyData = [
     { month: "Oct", contributions: 20000, loans: 5000 },
@@ -97,6 +120,36 @@ const TreasurerDashboard = () => {
       member.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleUpdateMember = (updatedMember: Member) => {
+    setMembers((prev) =>
+      prev.map((m) => (m.id === updatedMember.id ? updatedMember : m))
+    );
+    setSelectedMember(updatedMember);
+  };
+
+  const handleOpenUpdateModal = (member: Member) => {
+    setSelectedMember(member);
+    setUpdateModalOpen(true);
+  };
+
+  // Render settings page
+  if (isSettingsPage) {
+    return (
+      <DashboardLayout
+        title="Settings"
+        subtitle="Configure loan rates and investment targets"
+        role="treasurer"
+      >
+        <SettingsPanel
+          interestRate={interestRate}
+          investmentTarget={investmentTarget}
+          onUpdateInterestRate={setInterestRate}
+          onUpdateTarget={setInvestmentTarget}
+        />
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout
       title="Treasurer Dashboard"
@@ -107,7 +160,7 @@ const TreasurerDashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <StatsCard
           title="Total Funds"
-          value={`KES ${(stats.totalFunds / 1000000).toFixed(2)}M`}
+          value={`KES ${(stats.totalFunds / 1000).toFixed(0)}K`}
           subtitle="Collective investment"
           icon={Wallet}
           variant="gold"
@@ -123,7 +176,7 @@ const TreasurerDashboard = () => {
         <StatsCard
           title="Loans Issued"
           value={`KES ${(stats.totalLoansIssued / 1000).toFixed(0)}K`}
-          subtitle="Outstanding loans"
+          subtitle={`@ ${interestRate}% interest`}
           icon={CreditCard}
           variant="warning"
         />
@@ -141,6 +194,18 @@ const TreasurerDashboard = () => {
           icon={TrendingUp}
           variant="success"
         />
+      </div>
+
+      {/* Quick Actions */}
+      <div className="flex flex-wrap gap-3 mb-8">
+        <Button variant="gold" onClick={() => setLoanModalOpen(true)}>
+          <CreditCard className="w-4 h-4 mr-2" />
+          Process New Loan
+        </Button>
+        <Button variant="outline" onClick={() => navigate("/treasurer/settings")}>
+          <TrendingUp className="w-4 h-4 mr-2" />
+          Update Settings
+        </Button>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8 mb-8">
@@ -237,7 +302,7 @@ const TreasurerDashboard = () => {
 
       {/* Group Progress */}
       <div className="mb-8">
-        <ProgressCard title="Investment Target Progress" current={stats.totalFunds} target={5000000} />
+        <ProgressCard title="Investment Target Progress" current={stats.totalFunds} target={investmentTarget} />
       </div>
 
       {/* Members Table */}
@@ -267,6 +332,7 @@ const TreasurerDashboard = () => {
                 <TableRow>
                   <TableHead>Member</TableHead>
                   <TableHead className="text-right">Total Invested</TableHead>
+                  <TableHead className="text-right">Max Loan (5x)</TableHead>
                   <TableHead className="text-right">Arrears</TableHead>
                   <TableHead className="text-right">Loan Balance</TableHead>
                   <TableHead>Status</TableHead>
@@ -289,6 +355,9 @@ const TreasurerDashboard = () => {
                     </TableCell>
                     <TableCell className="text-right font-medium">
                       KES {member.totalInvested.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right text-accent font-medium">
+                      KES {(member.totalInvested * 5).toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right">
                       <span className={member.arrears > 0 ? "text-destructive font-medium" : "text-success"}>
@@ -329,11 +398,11 @@ const TreasurerDashboard = () => {
                             <Eye className="w-4 h-4 mr-2" />
                             View Details
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenUpdateModal(member)}>
                             <Edit className="w-4 h-4 mr-2" />
                             Update Records
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setLoanModalOpen(true)}>
                             <CreditCard className="w-4 h-4 mr-2" />
                             Process Loan
                           </DropdownMenuItem>
@@ -347,6 +416,21 @@ const TreasurerDashboard = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Modals */}
+      <LoanProcessingModal
+        open={loanModalOpen}
+        onOpenChange={setLoanModalOpen}
+        members={members}
+        interestRate={interestRate}
+      />
+      
+      <MemberUpdateModal
+        open={updateModalOpen}
+        onOpenChange={setUpdateModalOpen}
+        member={selectedMember}
+        onUpdate={handleUpdateMember}
+      />
     </DashboardLayout>
   );
 };
