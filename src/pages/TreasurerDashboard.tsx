@@ -14,15 +14,16 @@ import {
   CheckCircle2,
   XCircle,
   ArrowUpRight,
-  ArrowDownRight,
   DollarSign,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import StatsCard from "@/components/dashboard/StatsCard";
 import ProgressCard from "@/components/dashboard/ProgressCard";
-import LoanProcessingModal from "@/components/treasurer/LoanProcessingModal";
+import FinancialOverview from "@/components/dashboard/FinancialOverview";
 import MemberUpdateModal from "@/components/treasurer/MemberUpdateModal";
 import SettingsPanel from "@/components/treasurer/SettingsPanel";
+import PendingLoanRequests from "@/components/treasurer/PendingLoanRequests";
+import LoanApprovalModal from "@/components/treasurer/LoanApprovalModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,17 +54,37 @@ interface Member {
   status: string;
 }
 
+interface GuarantorInfo {
+  memberId: number;
+  memberName: string;
+  amount: number;
+  memberSavings: number;
+}
+
+interface LoanRequest {
+  id: number;
+  memberId: number;
+  memberName: string;
+  amount: number;
+  memberSavings: number;
+  guarantors: GuarantorInfo[];
+  requestDate: string;
+  status: "pending" | "approved" | "rejected";
+}
+
 const TreasurerDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
-  const [loanModalOpen, setLoanModalOpen] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<LoanRequest | null>(null);
   
   // Settings state
-  const [interestRate, setInterestRate] = useState(5);
+  const [interestRate] = useState(5); // Fixed at 5% per month
   const [investmentTarget, setInvestmentTarget] = useState(5000000);
+  const [minimumBalance, setMinimumBalance] = useState(50000);
 
   // Check if we're on the settings page
   const isSettingsPage = location.pathname === "/treasurer/settings";
@@ -90,10 +111,48 @@ const TreasurerDashboard = () => {
     { id: 6, name: "Susan Njeri", email: "susan@example.com", totalInvested: 24000, arrears: 2000, loanBalance: 10000, status: "arrears" },
   ]);
 
+  // Pending loan requests
+  const [loanRequests, setLoanRequests] = useState<LoanRequest[]>([
+    {
+      id: 1,
+      memberId: 2,
+      memberName: "Mary Wanjiku",
+      amount: 80000,
+      memberSavings: 32000,
+      guarantors: [
+        { memberId: 5, memberName: "Peter Ochieng", amount: 28000, memberSavings: 28000 },
+        { memberId: 4, memberName: "Grace Akinyi", amount: 30000, memberSavings: 30000 },
+        { memberId: 1, memberName: "John Mwangi", amount: 10000, memberSavings: 28000 },
+      ],
+      requestDate: "2024-12-28",
+      status: "pending",
+    },
+    {
+      id: 2,
+      memberId: 5,
+      memberName: "Peter Ochieng",
+      amount: 50000,
+      memberSavings: 28000,
+      guarantors: [
+        { memberId: 2, memberName: "Mary Wanjiku", amount: 32000, memberSavings: 32000 },
+        { memberId: 4, memberName: "Grace Akinyi", amount: 10000, memberSavings: 30000 },
+      ],
+      requestDate: "2024-12-29",
+      status: "pending",
+    },
+  ]);
+
+  // Calculate stats
+  const totalInvestments = members.reduce((sum, m) => sum + m.totalInvested, 0);
+  const totalLoansGiven = members.reduce((sum, m) => sum + m.loanBalance, 0);
+  const totalArrears = members.reduce((sum, m) => sum + m.arrears, 0);
+  const availableBalance = totalInvestments - totalLoansGiven;
+  const totalExpectedAfterLoans = totalInvestments + (totalLoansGiven * 0.05);
+
   const stats = {
-    totalFunds: members.reduce((sum, m) => sum + m.totalInvested, 0),
-    totalLoansIssued: members.reduce((sum, m) => sum + m.loanBalance, 0),
-    totalArrears: members.reduce((sum, m) => sum + m.arrears, 0),
+    totalFunds: totalInvestments,
+    totalLoansIssued: totalLoansGiven,
+    totalArrears: totalArrears,
     activeMembers: members.length,
     collectionRate: 96,
   };
@@ -109,9 +168,9 @@ const TreasurerDashboard = () => {
 
   const recentActivity = [
     { id: 1, action: "Contribution received", member: "John Mwangi", amount: 2000, time: "2 hours ago" },
-    { id: 2, action: "Loan approved", member: "Grace Akinyi", amount: 20000, time: "5 hours ago" },
+    { id: 2, action: "Loan request", member: "Mary Wanjiku", amount: 80000, time: "5 hours ago" },
     { id: 3, action: "Arrears recorded", member: "James Kamau", amount: 4000, time: "1 day ago" },
-    { id: 4, action: "Loan repayment", member: "Mary Wanjiku", amount: 5000, time: "2 days ago" },
+    { id: 4, action: "Loan repayment", member: "Grace Akinyi", amount: 5000, time: "2 days ago" },
   ];
 
   const filteredMembers = members.filter(
@@ -132,18 +191,44 @@ const TreasurerDashboard = () => {
     setUpdateModalOpen(true);
   };
 
+  const handleReviewRequest = (request: LoanRequest) => {
+    setSelectedRequest(request);
+    setApprovalModalOpen(true);
+  };
+
+  const handleApproveLoan = (requestId: number, processingFee: number, deductFromLoan: boolean) => {
+    setLoanRequests(prev => prev.map(r => 
+      r.id === requestId ? { ...r, status: "approved" as const } : r
+    ));
+    // Update member's loan balance
+    const request = loanRequests.find(r => r.id === requestId);
+    if (request) {
+      setMembers(prev => prev.map(m => 
+        m.id === request.memberId 
+          ? { ...m, loanBalance: m.loanBalance + request.amount }
+          : m
+      ));
+    }
+  };
+
+  const handleRejectLoan = (requestId: number, reason: string) => {
+    setLoanRequests(prev => prev.map(r => 
+      r.id === requestId ? { ...r, status: "rejected" as const } : r
+    ));
+  };
+
   // Render settings page
   if (isSettingsPage) {
     return (
       <DashboardLayout
         title="Settings"
-        subtitle="Configure loan rates and investment targets"
+        subtitle="Configure investment targets and system settings"
         role="treasurer"
       >
         <SettingsPanel
           interestRate={interestRate}
           investmentTarget={investmentTarget}
-          onUpdateInterestRate={setInterestRate}
+          onUpdateInterestRate={() => {}} // Interest rate is fixed at 5%
           onUpdateTarget={setInvestmentTarget}
         />
       </DashboardLayout>
@@ -156,6 +241,18 @@ const TreasurerDashboard = () => {
       subtitle="Manage investments, loans, and member finances"
       role="treasurer"
     >
+      {/* Financial Overview */}
+      <div className="mb-8">
+        <FinancialOverview
+          totalInvestments={totalInvestments}
+          totalLoansGiven={totalLoansGiven}
+          totalExpectedAfterLoans={totalExpectedAfterLoans}
+          availableBalance={availableBalance}
+          minimumBalance={minimumBalance}
+          interestRate={interestRate}
+        />
+      </div>
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <StatsCard
@@ -176,7 +273,7 @@ const TreasurerDashboard = () => {
         <StatsCard
           title="Loans Issued"
           value={`KES ${(stats.totalLoansIssued / 1000).toFixed(0)}K`}
-          subtitle={`@ ${interestRate}% interest`}
+          subtitle={`@ ${interestRate}%/mo interest`}
           icon={CreditCard}
           variant="warning"
         />
@@ -196,16 +293,12 @@ const TreasurerDashboard = () => {
         />
       </div>
 
-      {/* Quick Actions */}
-      <div className="flex flex-wrap gap-3 mb-8">
-        <Button variant="gold" onClick={() => setLoanModalOpen(true)}>
-          <CreditCard className="w-4 h-4 mr-2" />
-          Process New Loan
-        </Button>
-        <Button variant="outline" onClick={() => navigate("/treasurer/settings")}>
-          <TrendingUp className="w-4 h-4 mr-2" />
-          Update Settings
-        </Button>
+      {/* Pending Loan Requests */}
+      <div className="mb-8">
+        <PendingLoanRequests
+          requests={loanRequests}
+          onReviewRequest={handleReviewRequest}
+        />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8 mb-8">
@@ -215,7 +308,7 @@ const TreasurerDashboard = () => {
             <CardTitle>Monthly Overview</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px]">
+            <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={monthlyData}>
                   <defs>
@@ -262,14 +355,14 @@ const TreasurerDashboard = () => {
         </Card>
 
         {/* Recent Activity */}
-        <Card variant="bordered">
+        <Card variant="elevated">
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
+                <div key={activity.id} className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
                   <div className={`p-2 rounded-lg ${
                     activity.action.includes("received") || activity.action.includes("repayment")
                       ? "bg-success/10 text-success"
@@ -331,7 +424,7 @@ const TreasurerDashboard = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Member</TableHead>
-                  <TableHead className="text-right">Total Invested</TableHead>
+                  <TableHead className="text-right">Savings</TableHead>
                   <TableHead className="text-right">Max Loan (5x)</TableHead>
                   <TableHead className="text-right">Arrears</TableHead>
                   <TableHead className="text-right">Loan Balance</TableHead>
@@ -341,10 +434,10 @@ const TreasurerDashboard = () => {
               </TableHeader>
               <TableBody>
                 {filteredMembers.map((member) => (
-                  <TableRow key={member.id}>
+                  <TableRow key={member.id} className="hover:bg-muted/50">
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center font-semibold text-primary">
                           {member.name.charAt(0)}
                         </div>
                         <div>
@@ -356,7 +449,7 @@ const TreasurerDashboard = () => {
                     <TableCell className="text-right font-medium">
                       KES {member.totalInvested.toLocaleString()}
                     </TableCell>
-                    <TableCell className="text-right text-accent font-medium">
+                    <TableCell className="text-right text-accent font-semibold">
                       KES {(member.totalInvested * 5).toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right">
@@ -402,10 +495,6 @@ const TreasurerDashboard = () => {
                             <Edit className="w-4 h-4 mr-2" />
                             Update Records
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setLoanModalOpen(true)}>
-                            <CreditCard className="w-4 h-4 mr-2" />
-                            Process Loan
-                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -418,18 +507,21 @@ const TreasurerDashboard = () => {
       </Card>
 
       {/* Modals */}
-      <LoanProcessingModal
-        open={loanModalOpen}
-        onOpenChange={setLoanModalOpen}
-        members={members}
-        interestRate={interestRate}
-      />
-      
       <MemberUpdateModal
         open={updateModalOpen}
         onOpenChange={setUpdateModalOpen}
         member={selectedMember}
         onUpdate={handleUpdateMember}
+      />
+
+      <LoanApprovalModal
+        open={approvalModalOpen}
+        onOpenChange={setApprovalModalOpen}
+        request={selectedRequest}
+        availableBalance={availableBalance}
+        minimumBalance={minimumBalance}
+        onApprove={handleApproveLoan}
+        onReject={handleRejectLoan}
       />
     </DashboardLayout>
   );
