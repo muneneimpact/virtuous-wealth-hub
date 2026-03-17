@@ -14,16 +14,349 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          new_data: Json | null
+          old_data: Json | null
+          performed_by: string | null
+          record_id: string | null
+          table_name: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          performed_by?: string | null
+          record_id?: string | null
+          table_name?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          performed_by?: string | null
+          record_id?: string | null
+          table_name?: string | null
+        }
+        Relationships: []
+      }
+      contributions: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          member_id: string
+          month: string
+          notes: string | null
+          recorded_by: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          member_id: string
+          month: string
+          notes?: string | null
+          recorded_by: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          member_id?: string
+          month?: string
+          notes?: string | null
+          recorded_by?: string
+        }
+        Relationships: []
+      }
+      loan_guarantors: {
+        Row: {
+          amount: number
+          created_at: string
+          guarantor_id: string
+          id: string
+          loan_id: string
+          responded_at: string | null
+          status: Database["public"]["Enums"]["guarantor_status"]
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          guarantor_id: string
+          id?: string
+          loan_id: string
+          responded_at?: string | null
+          status?: Database["public"]["Enums"]["guarantor_status"]
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          guarantor_id?: string
+          id?: string
+          loan_id?: string
+          responded_at?: string | null
+          status?: Database["public"]["Enums"]["guarantor_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loan_guarantors_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loans: {
+        Row: {
+          amount: number
+          approved_by: string | null
+          created_at: string
+          deduct_fee_from_loan: boolean
+          disbursement_date: string | null
+          id: string
+          interest_rate: number
+          member_id: string
+          processing_fee: number
+          rejection_reason: string | null
+          repaid_amount: number
+          status: Database["public"]["Enums"]["loan_status"]
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          approved_by?: string | null
+          created_at?: string
+          deduct_fee_from_loan?: boolean
+          disbursement_date?: string | null
+          id?: string
+          interest_rate?: number
+          member_id: string
+          processing_fee?: number
+          rejection_reason?: string | null
+          repaid_amount?: number
+          status?: Database["public"]["Enums"]["loan_status"]
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          approved_by?: string | null
+          created_at?: string
+          deduct_fee_from_loan?: boolean
+          disbursement_date?: string | null
+          id?: string
+          interest_rate?: number
+          member_id?: string
+          processing_fee?: number
+          rejection_reason?: string | null
+          repaid_amount?: number
+          status?: Database["public"]["Enums"]["loan_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          data: Json | null
+          id: string
+          message: string
+          read: boolean
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data?: Json | null
+          id?: string
+          message: string
+          read?: boolean
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json | null
+          id?: string
+          message?: string
+          read?: boolean
+          title?: string
+          type?: Database["public"]["Enums"]["notification_type"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string
+          email: string | null
+          id: string
+          membership_number: string | null
+          phone: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string
+          email?: string | null
+          id?: string
+          membership_number?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string
+          email?: string | null
+          id?: string
+          membership_number?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      settings: {
+        Row: {
+          id: string
+          interest_rate: number
+          investment_target: number
+          minimum_balance: number
+          minimum_contribution: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          interest_rate?: number
+          investment_target?: number
+          minimum_balance?: number
+          minimum_contribution?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          interest_rate?: number
+          investment_target?: number
+          minimum_balance?: number
+          minimum_contribution?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          member_id: string | null
+          reference_id: string | null
+          type: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          member_id?: string | null
+          reference_id?: string | null
+          type: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          member_id?: string | null
+          reference_id?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_membership_number: { Args: never; Returns: string }
+      get_group_financials: { Args: never; Returns: Json }
+      get_user_status: { Args: { _user_id: string }; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      lookup_member_by_number: {
+        Args: { _membership_number: string }
+        Returns: Json
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "treasurer" | "member"
+      guarantor_status: "pending" | "accepted" | "declined"
+      loan_status:
+        | "draft"
+        | "pending_guarantors"
+        | "pending_approval"
+        | "approved"
+        | "rejected"
+        | "disbursed"
+        | "repaid"
+      notification_type:
+        | "guarantor_request"
+        | "guarantor_accepted"
+        | "guarantor_declined"
+        | "loan_approved"
+        | "loan_rejected"
+        | "loan_disbursed"
+        | "contribution_recorded"
+        | "member_approved"
+        | "member_rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +483,29 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "treasurer", "member"],
+      guarantor_status: ["pending", "accepted", "declined"],
+      loan_status: [
+        "draft",
+        "pending_guarantors",
+        "pending_approval",
+        "approved",
+        "rejected",
+        "disbursed",
+        "repaid",
+      ],
+      notification_type: [
+        "guarantor_request",
+        "guarantor_accepted",
+        "guarantor_declined",
+        "loan_approved",
+        "loan_rejected",
+        "loan_disbursed",
+        "contribution_recorded",
+        "member_approved",
+        "member_rejected",
+      ],
+    },
   },
 } as const
