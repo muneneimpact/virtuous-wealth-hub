@@ -31,20 +31,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 
 const AdminDashboard = () => {
-  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
-
-  useEffect(() => {
-    const user = localStorage.getItem("user");
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-    const userData = JSON.parse(user);
-    if (userData.role !== "admin") {
-      navigate(userData.role === "treasurer" ? "/treasurer" : "/dashboard");
-    }
-  }, [navigate]);
 
   // Mock data
   const stats = {
