@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Wallet,
   Users,
@@ -73,7 +73,6 @@ interface LoanRequest {
 }
 
 const TreasurerDashboard = () => {
-  const navigate = useNavigate();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
@@ -89,17 +88,6 @@ const TreasurerDashboard = () => {
   // Check if we're on the settings page
   const isSettingsPage = location.pathname === "/treasurer/settings";
 
-  useEffect(() => {
-    const user = localStorage.getItem("user");
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-    const userData = JSON.parse(user);
-    if (userData.role !== "treasurer" && userData.role !== "admin") {
-      navigate("/dashboard");
-    }
-  }, [navigate]);
 
   // Mock data
   const [members, setMembers] = useState<Member[]>([

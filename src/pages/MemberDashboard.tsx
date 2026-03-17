@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import {
   Wallet,
   CreditCard,
@@ -22,20 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 const MemberDashboard = () => {
-  const navigate = useNavigate();
   const [loanModalOpen, setLoanModalOpen] = useState(false);
-
-  useEffect(() => {
-    const user = localStorage.getItem("user");
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-    const userData = JSON.parse(user);
-    if (userData.role !== "member") {
-      navigate(`/${userData.role === "admin" ? "admin" : "treasurer"}`);
-    }
-  }, [navigate]);
 
   // Mock data - will be replaced with real data from backend
   const memberData = {
