@@ -73,7 +73,6 @@ interface LoanRequest {
 }
 
 const TreasurerDashboard = () => {
-  const navigate = useNavigate();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
