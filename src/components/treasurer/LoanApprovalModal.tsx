@@ -19,6 +19,7 @@ interface PendingLoan {
   amount: number;
   interest_rate: number;
   created_at?: string;
+  member_name: string;
   member_savings: number;
   guarantors: Array<{
     id: string;
