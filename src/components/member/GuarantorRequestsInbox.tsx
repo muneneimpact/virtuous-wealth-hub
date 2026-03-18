@@ -102,7 +102,7 @@ const GuarantorRequestsInbox = () => {
                 <Button
                   variant="default"
                   className="flex-1"
-                  onClick={() => handleRespond(req.id, req.loan?.member_id || "", "accepted")}
+                  onClick={() => handleRespond(req.id, req.loan_member_id, "accepted")}
                   disabled={processingId === req.id}
                 >
                   <CheckCircle2 className="w-4 h-4 mr-2" />
