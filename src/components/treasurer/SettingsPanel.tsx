@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Percent, Target, Save, Settings, AlertCircle } from "lucide-react";
+import { Percent, Target, Save, Settings, AlertCircle, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSettings } from "@/hooks/useAppData";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,11 +18,14 @@ const SettingsPanel = () => {
 
   const interestRate = settings?.interest_rate ? Number(settings.interest_rate) : 5;
   const investmentTarget = settings?.investment_target ? Number(settings.investment_target) : 5000000;
+  const minimumBalance = settings?.minimum_balance ? Number(settings.minimum_balance) : 50000;
 
   const [newInterestRate, setNewInterestRate] = useState("");
   const [newTarget, setNewTarget] = useState("");
+  const [newMinimumBalance, setNewMinimumBalance] = useState("");
   const [isSavingRate, setIsSavingRate] = useState(false);
   const [isSavingTarget, setIsSavingTarget] = useState(false);
+  const [isSavingBalance, setIsSavingBalance] = useState(false);
 
   const handleSaveInterestRate = async () => {
     const rate = parseFloat(newInterestRate);
@@ -68,17 +71,39 @@ const SettingsPanel = () => {
     setIsSavingTarget(false);
   };
 
+  const handleSaveMinimumBalance = async () => {
+    const balance = parseFloat(newMinimumBalance);
+    if (isNaN(balance) || balance < 0) {
+      toast({ title: "Invalid Balance", description: "Enter a valid amount.", variant: "destructive" });
+      return;
+    }
+    setIsSavingBalance(true);
+    try {
+      await supabase.from("settings").update({ minimum_balance: balance, updated_by: user!.id }).eq("id", settings!.id);
+      await supabase.from("audit_logs").insert({
+        action: "Minimum Balance Updated", table_name: "settings",
+        performed_by: user!.id, old_data: { minimum_balance: minimumBalance }, new_data: { minimum_balance: balance },
+      });
+      toast({ title: "Minimum Balance Updated", description: `Set to KES ${balance.toLocaleString()}.` });
+      setNewMinimumBalance("");
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+    setIsSavingBalance(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 mb-6">
         <div className="p-3 rounded-xl bg-primary/10"><Settings className="w-6 h-6 text-primary" /></div>
         <div>
-          <h2 className="font-display text-2xl font-semibold">Loan & Investment Settings</h2>
-          <p className="text-muted-foreground">Configure interest rates and investment targets</p>
+          <h2 className="font-display text-2xl font-semibold">Loan & Financial Settings</h2>
+          <p className="text-muted-foreground">Configure interest rates, investment targets, and bank safeguards</p>
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid md:grid-cols-3 gap-6">
         <Card variant="gold">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Percent className="w-5 h-5 text-accent" /> Interest Rate</CardTitle>
@@ -125,21 +150,56 @@ const SettingsPanel = () => {
             </div>
           </CardContent>
         </Card>
+
+        <Card variant="elevated">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Shield className="w-5 h-5 text-green-600" /> Minimum Bank Balance</CardTitle>
+            <CardDescription>Safety threshold for loans</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 rounded-xl bg-muted/50">
+              <p className="text-sm text-muted-foreground mb-1">Current Balance</p>
+              <p className="font-display text-3xl font-bold text-green-600">KES {minimumBalance.toLocaleString()}</p>
+            </div>
+            <div className="space-y-2">
+              <Label>New Balance (KES)</Label>
+              <div className="flex gap-2">
+                <Input type="number" step="10000" min="0" value={newMinimumBalance} onChange={(e) => setNewMinimumBalance(e.target.value)} placeholder="Enter minimum balance" />
+                <Button onClick={handleSaveMinimumBalance} disabled={isSavingBalance || !newMinimumBalance}>
+                  {isSavingBalance ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Save className="w-4 h-4" />}
+                </Button>
+              </div>
+            </div>
+            <div className="p-3 rounded-lg bg-green-50 border border-green-200">
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Bank must always have at least this amount.</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card variant="elevated">
-        <CardHeader><CardTitle>Loan Eligibility Rules</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Loan Eligibility & Guarantee Rules</CardTitle></CardHeader>
         <CardContent>
           <div className="grid md:grid-cols-2 gap-4">
             <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
               <p className="text-sm text-muted-foreground mb-1">Maximum Loan Amount</p>
-              <p className="font-display text-xl font-bold">5x Contribution</p>
+              <p className="font-display text-xl font-bold">5x Savings</p>
               <p className="text-sm text-muted-foreground mt-2">Members can borrow up to 5 times their total contributions</p>
             </div>
             <div className="p-4 rounded-xl bg-accent/5 border border-accent/10">
-              <p className="text-sm text-muted-foreground mb-1">Guarantee Required</p>
-              <p className="font-display text-xl font-bold text-accent">80% Coverage</p>
-              <p className="text-sm text-muted-foreground mt-2">Loans must be guaranteed by 80% of the loan value</p>
+              <p className="text-sm text-muted-foreground mb-1">Self Guarantee Available If</p>
+              <p className="font-display text-xl font-bold text-accent">Savings ≥ Loan + Interest</p>
+              <p className="text-sm text-muted-foreground mt-2">After maintaining 5000 KES safety buffer</p>
+            </div>
+            <div className="p-4 rounded-xl bg-blue-50 border border-blue-200">
+              <p className="text-sm text-muted-foreground mb-1">Guarantor Capacity</p>
+              <p className="font-display text-xl font-bold text-blue-600">Available Savings</p>
+              <p className="text-sm text-muted-foreground mt-2">Savings minus active loans minus existing guarantees</p>
+            </div>
+            <div className="p-4 rounded-xl bg-orange-50 border border-orange-200">
+              <p className="text-sm text-muted-foreground mb-1">Bank Balance Check</p>
+              <p className="font-display text-xl font-bold text-orange-600">≥ Minimum Balance</p>
+              <p className="text-sm text-muted-foreground mt-2">Loan can only be disbursed if this is maintained</p>
             </div>
           </div>
         </CardContent>

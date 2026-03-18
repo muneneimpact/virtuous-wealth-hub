@@ -143,7 +143,7 @@ const Index = () => {
       <section className="py-16 gradient-primary -mt-1">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <StatCard value="KES 2M+" label="Target Investment" />
+            <StatCard value="KES 5M+" label="Target Investment" />
             <StatCard value="10+" label="Active Members" />
             <StatCard value="98%" label="Collection Rate" />
             <StatCard value="5%" label="Loan Interest" />

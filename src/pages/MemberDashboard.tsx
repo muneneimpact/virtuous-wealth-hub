@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Wallet, CreditCard, TrendingUp, AlertCircle, CheckCircle2,
-  ArrowUpRight, ArrowDownRight, Users, Calendar, Send,
+  ArrowUpRight, ArrowDownRight, Users, Calendar, Send, FileText,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import StatsCard from "@/components/dashboard/StatsCard";
@@ -9,6 +9,8 @@ import ProgressCard from "@/components/dashboard/ProgressCard";
 import FinancialOverview from "@/components/dashboard/FinancialOverview";
 import LoanRequestModal from "@/components/member/LoanRequestModal";
 import GuarantorRequestsInbox from "@/components/member/GuarantorRequestsInbox";
+import PaymentSubmissionModal from "@/components/member/PaymentSubmissionModal";
+import MemberFinancialSummary from "@/components/member/MemberFinancialSummary";
 import LoanCalculator from "@/components/member/LoanCalculator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +23,7 @@ import {
 
 const MemberDashboard = () => {
   const [loanModalOpen, setLoanModalOpen] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const { profile, user } = useAuth();
   const { data: contributions = [] } = useMyContributions();
   const { data: loans = [] } = useMyLoans();
@@ -106,29 +109,55 @@ const MemberDashboard = () => {
         />
       </div>
 
-      {/* Loan Request */}
-      {canRequestLoan && !pendingLoan && (
-        <div className="mb-8">
+      {/* Payment Submission & Loan Request */}
+      <div className="mb-8 grid md:grid-cols-2 gap-6">
+        {/* Submit Payment Card */}
+        <Card variant="bordered" className="bg-gradient-to-r from-success/5 to-success/10">
+          <CardContent className="py-6">
+            <div className="flex flex-col items-center justify-between gap-4">
+              <div className="w-full">
+                <h3 className="font-display text-lg font-semibold mb-1">Submit Payment</h3>
+                <p className="text-sm text-muted-foreground">
+                  Report your M-Pesa payment for verification and posting to your account.
+                </p>
+              </div>
+              <Button
+                variant="default"
+                size="lg"
+                onClick={() => setPaymentModalOpen(true)}
+                className="w-full gap-2"
+              >
+                <FileText className="w-5 h-5" />
+                Submit Payment
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Loan Request Card */}
+        {canRequestLoan && !pendingLoan && (
           <Card variant="bordered" className="bg-gradient-to-r from-primary/5 to-accent/5">
             <CardContent className="py-6">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                <div>
-                  <h3 className="font-display text-xl font-semibold mb-1">
+              <div className="flex flex-col items-center justify-between gap-4">
+                <div className="w-full">
+                  <h3 className="font-display text-lg font-semibold mb-1">
                     {loanBalance > 0 ? "Need More Funds?" : "Need a Loan?"}
                   </h3>
-                  <p className="text-muted-foreground">
-                    You can borrow up to KES {remainingBorrowingCapacity.toLocaleString()} more. Select guarantors by their membership number.
+                  <p className="text-sm text-muted-foreground">
+                    You can borrow up to KES {remainingBorrowingCapacity.toLocaleString()} more.
                   </p>
                 </div>
-                <Button variant="gold" size="lg" onClick={() => setLoanModalOpen(true)}>
-                  <Send className="w-5 h-5 mr-2" />
+                <Button variant="gold" size="lg" onClick={() => setLoanModalOpen(true)} className="w-full gap-2">
+                  <Send className="w-5 h-5" />
                   Request Loan
                 </Button>
               </div>
             </CardContent>
           </Card>
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* Old Loan Request Section - Keep for pending loan display */}
 
       {pendingLoan && (
         <div className="mb-8">
@@ -223,6 +252,9 @@ const MemberDashboard = () => {
           {/* Loan Calculator */}
           <LoanCalculator />
 
+          {/* Member Financial Summary */}
+          <MemberFinancialSummary loanAmount={0} />
+
           {/* Guarantorships */}
           <Card variant="elevated">
             <CardHeader>
@@ -273,6 +305,12 @@ const MemberDashboard = () => {
         maxLoanAmount={remainingBorrowingCapacity}
         totalSavings={totalSavings}
         currentLoanBalance={loanBalance}
+      />
+
+      <PaymentSubmissionModal
+        open={paymentModalOpen}
+        onOpenChange={setPaymentModalOpen}
+        monthlyContribution={2000}
       />
     </DashboardLayout>
   );

@@ -404,3 +404,35 @@ export const useAllContributions = () =>
       return data || [];
     },
   });
+
+// ===== My Payment Requests =====
+export const useMyPaymentRequests = () => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["my-payment-requests", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("payment_requests")
+        .select("*")
+        .eq("member_id", user!.id)
+        .order("submitted_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user,
+  });
+};
+
+// ===== All Payment Requests (treasurer) =====
+export const useAllPaymentRequests = () =>
+  useQuery({
+    queryKey: ["all-payment-requests"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("payment_requests")
+        .select("*")
+        .order("submitted_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });

@@ -12,6 +12,7 @@ import MemberUpdateModal from "@/components/treasurer/MemberUpdateModal";
 import SettingsPanel from "@/components/treasurer/SettingsPanel";
 import PendingLoanRequests from "@/components/treasurer/PendingLoanRequests";
 import LoanApprovalModal from "@/components/treasurer/LoanApprovalModal";
+import PaymentApprovalsPanel from "@/components/treasurer/PaymentApprovalsPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -216,6 +217,12 @@ const TreasurerDashboard = () => {
 
       <div className="mb-8">
         <ProgressCard title="Investment Target Progress" current={gfTotal} target={investmentTarget} />
+      </div>
+
+      {/* Payment Approvals */}
+      <div className="mb-8">
+        <h2 className="font-display text-2xl font-semibold mb-4">Payment Verification</h2>
+        <PaymentApprovalsPanel />
       </div>
 
       <Card variant="elevated">

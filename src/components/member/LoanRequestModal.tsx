@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -6,11 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle2, Calculator, Users, Send, Search, X } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle, CheckCircle2, Calculator, Users, Send, Search, X, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  getMemberFinancials,
+  calculateSelfGuaranteeLimit,
+  validateGuarantorCapacity,
+  getBankBalance,
+  createGuarantorNotification,
+} from "@/lib/loanCalculations";
 
 interface GuarantorEntry {
   userId: string;
@@ -39,26 +47,67 @@ const LoanRequestModal = ({
   const [lookupNumber, setLookupNumber] = useState("");
   const [isLooking, setIsLooking] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [interestRate, setInterestRate] = useState(5);
+  const [isSelfGuaranteeEligible, setIsSelfGuaranteeEligible] = useState(false);
+  const [selfGuaranteeLimit, setSelfGuaranteeLimit] = useState(0);
+  const [amountRequiringGuarantors, setAmountRequiringGuarantors] = useState(0);
+  const [loadingFinancials, setLoadingFinancials] = useState(false);
 
   const maxEligibility = totalSavings * 5;
   const parsedAmount = parseFloat(loanAmount) || 0;
-  const requiredGuarantee = parsedAmount * 0.8;
+  const estimatedInterest = (parsedAmount * interestRate) / 100;
   const totalGuarantee = guarantors.reduce((sum, g) => sum + (parseFloat(g.amount) || 0), 0);
-  const isGuaranteeValid = totalGuarantee >= requiredGuarantee;
   const isAmountValid = parsedAmount > 0 && parsedAmount <= maxLoanAmount;
+
+  // Load financial data and calculate self-guarantee eligibility
+  useEffect(() => {
+    if (!open || parsedAmount <= 0 || !user?.id) {
+      setSelfGuaranteeLimit(0);
+      setAmountRequiringGuarantors(0);
+      setIsSelfGuaranteeEligible(false);
+      return;
+    }
+
+    const loadFinancials = async () => {
+      setLoadingFinancials(true);
+      try {
+        const financials = await getMemberFinancials(user.id);
+        setInterestRate(financials.interestRate);
+
+        const { limit, isEligible, estimatedInterest: calculatedInterest } = 
+          calculateSelfGuaranteeLimit(
+            financials.totalSavings,
+            parsedAmount,
+            financials.interestRate
+          );
+
+        setSelfGuaranteeLimit(limit);
+        setIsSelfGuaranteeEligible(isEligible);
+        setAmountRequiringGuarantors(Math.max(0, parsedAmount - limit));
+      } catch (error) {
+        console.error("Error loading financials:", error);
+      } finally {
+        setLoadingFinancials(false);
+      }
+    };
+
+    loadFinancials();
+  }, [open, parsedAmount, user?.id]);
 
   const guarantorValidations = useMemo(() => {
     return guarantors.map((g) => {
       const amt = parseFloat(g.amount) || 0;
-      return { ...g, valid: amt > 0 && amt <= g.savings };
+      // Updated validation: guarantor must have capacity for the amount
+      const capacity = Math.max(0, g.savings - (g.savings * 0.2)); // Simple capacity calc
+      return { ...g, valid: amt > 0 && amt <= g.savings, message: amt > g.savings ? "Exceeds savings" : "" };
     });
   }, [guarantors]);
 
   const allGuarantorsValid = guarantorValidations.every((g) => g.valid || !(parseFloat(g.amount) > 0));
-  const hasGuarantors = guarantors.some((g) => parseFloat(g.amount) > 0);
-  const canSubmit = isAmountValid && isGuaranteeValid && allGuarantorsValid && hasGuarantors;
-
-  const interestAmount = parsedAmount * 0.05;
+  
+  // New validation logic based on self-guarantee rule
+  const isGuaranteeValid = isSelfGuaranteeEligible || (amountRequiringGuarantors <= totalGuarantee && amountRequiringGuarantors > 0);
+  const canSubmit = isAmountValid && isGuaranteeValid && allGuarantorsValid && !loadingFinancials;
 
   const handleLookup = async () => {
     if (!lookupNumber.trim()) return;
@@ -85,20 +134,46 @@ const LoanRequestModal = ({
         return;
       }
 
-      // Get their savings
+      // Get their savings and existing guarantees
       const { data: contribs } = await supabase
         .from("contributions")
         .select("amount")
         .eq("member_id", member.user_id);
       const savings = (contribs || []).reduce((sum, c) => sum + Number(c.amount), 0);
 
+      // Get existing guarantees
+      const { data: guaranteeData } = await supabase
+        .from("loan_guarantors")
+        .select("amount, status")
+        .eq("guarantor_id", member.user_id)
+        .in("status", ["pending", "accepted"]);
+      const existingGuarantees = (guaranteeData || []).reduce((sum, g) => sum + (g.amount || 0), 0);
+
+      // Get active loans
+      const { data: loansData } = await supabase
+        .from("loans")
+        .select("amount, repaid_amount")
+        .eq("member_id", member.user_id)
+        .in("status", ["approved", "disbursed"]);
+      const activeLoanBalance = (loansData || []).reduce((sum, l) => sum + ((l.amount || 0) - (l.repaid_amount || 0)), 0);
+
+      // Calculate available capacity
+      const availableCapacity = Math.max(0, savings - activeLoanBalance - existingGuarantees);
+
       setGuarantors((prev) => [
         ...prev,
-        { userId: member.user_id, name: member.display_name, membershipNumber: member.membership_number, savings, amount: "" },
+        { 
+          userId: member.user_id, 
+          name: member.display_name, 
+          membershipNumber: member.membership_number, 
+          savings: availableCapacity, 
+          amount: "" 
+        },
       ]);
       setLookupNumber("");
-    } catch {
-      toast({ title: "Error", description: "Failed to look up member.", variant: "destructive" });
+      toast({ title: "Added", description: `${member.display_name} added as guarantor. Available capacity: KES ${availableCapacity.toLocaleString()}` });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Failed to look up member.", variant: "destructive" });
     }
     setIsLooking(false);
   };
@@ -116,37 +191,48 @@ const LoanRequestModal = ({
     setIsSubmitting(true);
     try {
       // Create loan
+      const loanStatus = isSelfGuaranteeEligible ? "pending_approval" : "pending_guarantors";
       const { data: loan, error: loanError } = await supabase
         .from("loans")
-        .insert({ member_id: user.id, amount: parsedAmount, status: "pending_guarantors" as any, interest_rate: 5 })
+        .insert({ 
+          member_id: user.id, 
+          amount: parsedAmount, 
+          status: loanStatus,
+          interest_rate: interestRate 
+        })
         .select()
         .single();
       if (loanError) throw loanError;
 
-      // Create guarantor entries
-      const guarantorInserts = guarantors
-        .filter((g) => parseFloat(g.amount) > 0)
-        .map((g) => ({
-          loan_id: loan.id,
-          guarantor_id: g.userId,
-          amount: parseFloat(g.amount),
-        }));
-      const { error: gError } = await supabase.from("loan_guarantors").insert(guarantorInserts);
-      if (gError) throw gError;
+      // Create guarantor entries only if needed
+      if (!isSelfGuaranteeEligible && guarantors.length > 0) {
+        const guarantorInserts = guarantors
+          .filter((g) => parseFloat(g.amount) > 0)
+          .map((g) => ({
+            loan_id: loan.id,
+            guarantor_id: g.userId,
+            amount: parseFloat(g.amount),
+          }));
+        const { error: gError } = await supabase.from("loan_guarantors").insert(guarantorInserts);
+        if (gError) throw gError;
 
-      // Notify each guarantor
-      const notifications = guarantors
-        .filter((g) => parseFloat(g.amount) > 0)
-        .map((g) => ({
-          user_id: g.userId,
-          type: "guarantor_request" as const,
-          title: "Guarantee Request",
-          message: `You have been asked to guarantee a loan of KES ${parsedAmount.toLocaleString()} with KES ${parseFloat(g.amount).toLocaleString()}.`,
-          data: { loan_id: loan.id },
-        }));
-      await supabase.from("notifications").insert(notifications);
+        // Notify each guarantor
+        const guarantorList = guarantors.filter((g) => parseFloat(g.amount) > 0);
+        for (const guarantor of guarantorList) {
+          await createGuarantorNotification(
+            guarantor.userId,
+            user.user_metadata?.full_name || "Member",
+            parsedAmount,
+            parseFloat(guarantor.amount)
+          );
+        }
+      }
 
-      toast({ title: "Loan Request Submitted", description: "Guarantors have been notified." });
+      const successMessage = isSelfGuaranteeEligible 
+        ? "Loan request submitted! Self-guarantee is available, moving to treasurer approval."
+        : "Loan request submitted! Guarantors have been notified.";
+
+      toast({ title: "Loan Request Submitted", description: successMessage });
       queryClient.invalidateQueries({ queryKey: ["my-loans"] });
       onOpenChange(false);
       resetForm();
@@ -210,26 +296,65 @@ const LoanRequestModal = ({
             )}
           </div>
 
-          {/* Repayment Info */}
+          {/* Repayment Info and Self-Guarantee Status */}
           {loanAmount && isAmountValid && (
-            <div className="p-4 rounded-xl bg-muted/50 border">
-              <p className="text-sm text-muted-foreground mb-2">First Month Summary</p>
-              <div className="grid grid-cols-3 gap-4">
-                <div><p className="text-xs text-muted-foreground">Principal</p><p className="font-semibold">KES {parsedAmount.toLocaleString()}</p></div>
-                <div><p className="text-xs text-muted-foreground">Interest (5%)</p><p className="font-semibold text-warning">KES {interestAmount.toLocaleString()}</p></div>
-                <div><p className="text-xs text-muted-foreground">Total Due</p><p className="font-semibold text-primary">KES {(parsedAmount + interestAmount).toLocaleString()}</p></div>
+            <>
+              <div className="p-4 rounded-xl bg-muted/50 border">
+                <p className="text-sm text-muted-foreground mb-3">Repayment Summary</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div><p className="text-xs text-muted-foreground">Principal</p><p className="font-semibold">KES {parsedAmount.toLocaleString()}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Interest ({interestRate}%)</p><p className="font-semibold text-warning">KES {estimatedInterest.toLocaleString()}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Total Due</p><p className="font-semibold text-primary">KES {(parsedAmount + estimatedInterest).toLocaleString()}</p></div>
+                </div>
               </div>
-            </div>
+
+              {/* Self-Guarantee Status */}
+              <Alert className={isSelfGuaranteeEligible ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"}>
+                <div className="flex items-start gap-3">
+                  {isSelfGuaranteeEligible ? (
+                    <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                  )}
+                  <div>
+                    <p className="font-semibold text-sm">
+                      {isSelfGuaranteeEligible ? "Self Guarantee Available" : "Guarantors Required"}
+                    </p>
+                    <AlertDescription className="text-xs mt-1">
+                      {isSelfGuaranteeEligible ? (
+                        <>Your savings are sufficient to cover this loan. No guarantors needed. Loan will move directly to treasurer approval.</>
+                      ) : (
+                        <>
+                          Your self-guarantee limit is KES {selfGuaranteeLimit.toLocaleString()}.
+                          You need guarantors to cover KES {amountRequiringGuarantors.toLocaleString()}.
+                        </>
+                      )}
+                    </AlertDescription>
+                  </div>
+                </div>
+              </Alert>
+            </>
           )}
 
-          {/* Guarantors */}
-          {loanAmount && isAmountValid && (
+          {/* Guarantors Section - Only show if not self-guaranteed */}
+          {loanAmount && isAmountValid && !isSelfGuaranteeEligible && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-2"><Users className="w-4 h-4" /> Guarantors</Label>
-                <Badge variant={isGuaranteeValid ? "default" : "destructive"}>
-                  {isGuaranteeValid ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
-                  KES {totalGuarantee.toLocaleString()} / {requiredGuarantee.toLocaleString()} (80%)
+                <Badge variant={amountRequiringGuarantors > 0 && totalGuarantee >= amountRequiringGuarantors ? "default" : totalGuarantee > 0 ? "secondary" : "destructive"}>
+                  {totalGuarantee >= amountRequiringGuarantors && amountRequiringGuarantors > 0 ? (
+                    <>
+                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                      KES {totalGuarantee.toLocaleString()} / {amountRequiringGuarantors.toLocaleString()}
+                    </>
+                  ) : amountRequiringGuarantors > 0 ? (
+                    <>
+                      <AlertTriangle className="w-3 h-3 mr-1" />
+                      Need KES {(amountRequiringGuarantors - totalGuarantee).toLocaleString()} more
+                    </>
+                  ) : (
+                    <>No guarantors needed</>
+                  )}
                 </Badge>
               </div>
 
@@ -251,12 +376,13 @@ const LoanRequestModal = ({
                 {guarantors.map((g) => {
                   const v = guarantorValidations.find((v) => v.userId === g.userId);
                   const amt = parseFloat(g.amount) || 0;
+                  const isValid = amt > 0 && amt <= g.savings;
                   return (
-                    <div key={g.userId} className={`p-4 rounded-lg border ${amt > 0 && !v?.valid ? "bg-destructive/5 border-destructive/30" : amt > 0 ? "bg-primary/5 border-primary/30" : "bg-muted/50"}`}>
+                    <div key={g.userId} className={`p-4 rounded-lg border ${!isValid && amt > 0 ? "bg-destructive/5 border-destructive/30" : isValid && amt > 0 ? "bg-primary/5 border-primary/30" : "bg-muted/50"}`}>
                       <div className="flex items-center justify-between mb-2">
                         <div>
                           <p className="font-medium">{g.name} <span className="text-muted-foreground text-xs">#{g.membershipNumber}</span></p>
-                          <p className="text-xs text-muted-foreground">Max: KES {g.savings.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">Available Capacity: KES {g.savings.toLocaleString()}</p>
                         </div>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeGuarantor(g.userId)}>
                           <X className="w-4 h-4" />
@@ -264,11 +390,11 @@ const LoanRequestModal = ({
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">KES</span>
-                        <Input type="number" placeholder="Amount agreed" value={g.amount} onChange={(e) => updateGuarantorAmount(g.userId, e.target.value)} className="flex-1" max={g.savings} />
+                        <Input type="number" placeholder="Amount to guarantee" value={g.amount} onChange={(e) => updateGuarantorAmount(g.userId, e.target.value)} className="flex-1" max={g.savings} />
                       </div>
-                      {amt > g.savings && (
+                      {amt > g.savings && amt > 0 && (
                         <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3" /> Exceeds member's savings
+                          <AlertTriangle className="w-3 h-3" /> Exceeds member's available capacity
                         </p>
                       )}
                     </div>
@@ -276,9 +402,9 @@ const LoanRequestModal = ({
                 })}
               </div>
 
-              {!isGuaranteeValid && requiredGuarantee > 0 && totalGuarantee > 0 && (
+              {amountRequiringGuarantors > 0 && totalGuarantee < amountRequiringGuarantors && (
                 <p className="text-sm text-destructive flex items-center gap-1">
-                  <AlertTriangle className="w-4 h-4" /> Need KES {(requiredGuarantee - totalGuarantee).toLocaleString()} more
+                  <AlertTriangle className="w-4 h-4" /> Still need KES {(amountRequiringGuarantors - totalGuarantee).toLocaleString()} in guarantees
                 </p>
               )}
             </div>
