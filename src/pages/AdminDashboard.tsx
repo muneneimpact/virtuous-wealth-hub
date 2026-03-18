@@ -1,18 +1,7 @@
 import { useState } from "react";
 import {
-  Shield,
-  Users,
-  AlertTriangle,
-  Activity,
-  Eye,
-  UserCheck,
-  UserX,
-  Clock,
-  Search,
-  FileText,
-  Settings,
-  Database,
-  Lock,
+  Shield, Users, AlertTriangle, Activity, UserCheck, UserX, Clock,
+  Search, FileText, Settings, Download, CheckCircle2,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import StatsCard from "@/components/dashboard/StatsCard";
@@ -21,173 +10,162 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Switch } from "@/components/ui/switch";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  usePendingApprovals, useAllProfiles, useUserRoles,
+  useAuditLogs, useGroupFinancials,
+} from "@/hooks/useAppData";
+import { exportToCSV } from "@/lib/exportReports";
 
 const AdminDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
 
-  // Mock data
-  const stats = {
-    totalUsers: 12,
-    activeTreasurers: 2,
-    systemHealth: 99.9,
-    pendingActions: 3,
-  };
+  const { data: pendingApprovals = [] } = usePendingApprovals();
+  const { data: allProfiles = [] } = useAllProfiles();
+  const { data: userRoles = [] } = useUserRoles();
+  const { data: auditLogs = [] } = useAuditLogs();
+  const { data: groupFinancials } = useGroupFinancials();
 
-  const users = [
-    { id: 1, name: "Mary Wanjiku", email: "treasurer@virtuous.co.ke", role: "treasurer", status: "active", lastLogin: "2 hours ago" },
-    { id: 2, name: "David Otieno", email: "david@example.com", role: "treasurer", status: "inactive", lastLogin: "5 days ago" },
-    { id: 3, name: "John Mwangi", email: "member@virtuous.co.ke", role: "member", status: "active", lastLogin: "1 hour ago" },
-    { id: 4, name: "James Kamau", email: "james@example.com", role: "member", status: "active", lastLogin: "3 hours ago" },
-    { id: 5, name: "Grace Akinyi", email: "grace@example.com", role: "member", status: "active", lastLogin: "1 day ago" },
-  ];
+  const activeMembers = allProfiles.filter((p) => p.status === "active");
+  const treasurers = userRoles.filter((r) => r.role === "treasurer");
 
-  const auditLogs = [
-    { id: 1, action: "Loan disbursement", user: "Mary Wanjiku", target: "James Kamau", amount: "KES 30,000", timestamp: "2024-12-30 14:32:00" },
-    { id: 2, action: "Contribution update", user: "Mary Wanjiku", target: "All members", amount: "Monthly cycle", timestamp: "2024-12-01 09:00:00" },
-    { id: 3, action: "Arrears recorded", user: "Mary Wanjiku", target: "Susan Njeri", amount: "KES 2,000", timestamp: "2024-11-28 11:45:00" },
-    { id: 4, action: "Interest rate change", user: "Peter Ochieng", target: "System settings", amount: "5% → 5.5%", timestamp: "2024-11-15 16:20:00" },
-    { id: 5, action: "New member added", user: "Mary Wanjiku", target: "Grace Akinyi", amount: "-", timestamp: "2024-11-10 10:00:00" },
-  ];
-
-  const filteredUsers = users.filter(
-    (user) =>
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.role.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredUsers = allProfiles.filter(
+    (p) =>
+      p.display_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.email || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const getRoles = (userId: string) => userRoles.filter((r) => r.user_id === userId).map((r) => r.role);
+
+  const handleApproveMember = async (profileId: string, userId: string, name: string) => {
+    const { error } = await supabase.from("profiles").update({ status: "active" }).eq("id", profileId);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+    await supabase.from("notifications").insert({
+      user_id: userId, type: "member_approved" as any,
+      title: "Account Approved", message: "Your account has been approved. Welcome to Virtuous Deca Investment!",
+    });
+    await supabase.from("audit_logs").insert({
+      action: "Member Approved", table_name: "profiles", record_id: profileId,
+      performed_by: user?.id, new_data: { status: "active", display_name: name },
+    });
+    toast({ title: "Member Approved", description: `${name} has been activated.` });
+    queryClient.invalidateQueries({ queryKey: ["pending-approvals"] });
+    queryClient.invalidateQueries({ queryKey: ["all-profiles"] });
+  };
+
+  const handleRejectMember = async (profileId: string, userId: string, name: string) => {
+    const { error } = await supabase.from("profiles").update({ status: "rejected" }).eq("id", profileId);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+    await supabase.from("notifications").insert({
+      user_id: userId, type: "member_rejected" as any,
+      title: "Account Rejected", message: "Your account application has been rejected. Contact the treasurer for details.",
+    });
+    toast({ title: "Member Rejected", description: `${name} has been rejected.` });
+    queryClient.invalidateQueries({ queryKey: ["pending-approvals"] });
+    queryClient.invalidateQueries({ queryKey: ["all-profiles"] });
+  };
+
+  const toggleTreasurerRole = async (userId: string, hasTreasurerRole: boolean) => {
+    if (hasTreasurerRole) {
+      await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", "treasurer" as any);
+      toast({ title: "Role Removed", description: "Treasurer role removed." });
+    } else {
+      await supabase.from("user_roles").insert({ user_id: userId, role: "treasurer" as any });
+      toast({ title: "Role Added", description: "Treasurer role assigned." });
+    }
+    queryClient.invalidateQueries({ queryKey: ["user-roles"] });
+  };
+
+  const toggleMemberStatus = async (profileId: string, currentStatus: string) => {
+    const newStatus = currentStatus === "active" ? "suspended" : "active";
+    await supabase.from("profiles").update({ status: newStatus }).eq("id", profileId);
+    toast({ title: "Status Updated", description: `Member ${newStatus}.` });
+    queryClient.invalidateQueries({ queryKey: ["all-profiles"] });
+  };
+
+  const exportAuditLogs = () => {
+    exportToCSV(
+      auditLogs.map((l) => ({
+        Action: l.action, Table: l.table_name || "", Record: l.record_id || "",
+        Timestamp: new Date(l.created_at).toLocaleString("en-KE"),
+      })),
+      "audit-logs"
+    );
+  };
+
   return (
-    <DashboardLayout
-      title="Admin Dashboard"
-      subtitle="System oversight and user management"
-      role="admin"
-    >
-      {/* Stats Grid */}
+    <DashboardLayout title="Admin Dashboard" subtitle="System oversight and user management" role="admin">
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatsCard
-          title="Total Users"
-          value={stats.totalUsers.toString()}
-          subtitle="All system users"
-          icon={Users}
-          variant="default"
-        />
-        <StatsCard
-          title="Active Treasurers"
-          value={stats.activeTreasurers.toString()}
-          subtitle="With full access"
-          icon={UserCheck}
-          variant="gold"
-        />
-        <StatsCard
-          title="System Health"
-          value={`${stats.systemHealth}%`}
-          subtitle="All systems operational"
-          icon={Activity}
-          variant="success"
-        />
-        <StatsCard
-          title="Pending Actions"
-          value={stats.pendingActions.toString()}
-          subtitle="Requires attention"
-          icon={AlertTriangle}
-          variant={stats.pendingActions > 0 ? "warning" : "success"}
-        />
+        <StatsCard title="Total Members" value={activeMembers.length.toString()} subtitle="Active members" icon={Users} variant="default" />
+        <StatsCard title="Treasurers" value={treasurers.length.toString()} subtitle="With full access" icon={UserCheck} variant="gold" />
+        <StatsCard title="Pending Approvals" value={pendingApprovals.length.toString()} subtitle="Awaiting review" icon={Clock} variant={pendingApprovals.length > 0 ? "warning" : "success"} />
+        <StatsCard title="Total Members" value={String(groupFinancials?.member_count || 0)} subtitle="Active in system" icon={Activity} variant="success" />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8 mb-8">
-        {/* Quick Actions */}
-        <Card variant="gold">
+      {/* Pending Approvals */}
+      {pendingApprovals.length > 0 && (
+        <Card variant="gold" className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5" />
-              Admin Controls
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button variant="default" className="w-full justify-start">
-              <Users className="w-4 h-4 mr-3" />
-              Manage User Roles
-            </Button>
-            <Button variant="outline" className="w-full justify-start">
-              <Database className="w-4 h-4 mr-3" />
-              Backup Data
-            </Button>
-            <Button variant="outline" className="w-full justify-start">
-              <Lock className="w-4 h-4 mr-3" />
-              Security Settings
-            </Button>
-            <Button variant="outline" className="w-full justify-start">
-              <Settings className="w-4 h-4 mr-3" />
-              System Configuration
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* System Alerts */}
-        <Card variant="bordered" className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-warning" />
-              System Alerts
+              <Clock className="w-5 h-5 text-warning" />
+              Pending Member Approvals
+              <Badge variant="secondary">{pendingApprovals.length}</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-warning/10 border border-warning/20">
-                <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-medium">Arrears Alert</p>
-                  <p className="text-sm text-muted-foreground">
-                    2 members have outstanding arrears totaling KES 6,000
-                  </p>
+            <div className="space-y-3">
+              {pendingApprovals.map((p) => (
+                <div key={p.id} className="flex items-center justify-between p-4 rounded-xl bg-background border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary">
+                      {p.display_name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-medium">{p.display_name}</p>
+                      <p className="text-sm text-muted-foreground">{p.email}</p>
+                      <p className="text-xs text-muted-foreground font-mono">#{p.membership_number}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="default" size="sm" onClick={() => handleApproveMember(p.id, p.user_id, p.display_name)}>
+                      <CheckCircle2 className="w-4 h-4 mr-1" /> Approve
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => handleRejectMember(p.id, p.user_id, p.display_name)}>
+                      <UserX className="w-4 h-4 mr-1" /> Reject
+                    </Button>
+                  </div>
                 </div>
-                <Button size="sm" variant="outline">Review</Button>
-              </div>
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-info/10 border border-info/20">
-                <Clock className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-medium">Monthly Cycle Reminder</p>
-                  <p className="text-sm text-muted-foreground">
-                    January 2025 contribution cycle starts in 2 days
-                  </p>
-                </div>
-                <Button size="sm" variant="outline">Dismiss</Button>
-              </div>
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-muted">
-                <FileText className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-medium">Loan Review Pending</p>
-                  <p className="text-sm text-muted-foreground">
-                    1 loan application awaiting secondary approval
-                  </p>
-                </div>
-                <Button size="sm" variant="outline">View</Button>
-              </div>
+              ))}
             </div>
           </CardContent>
         </Card>
-      </div>
+      )}
 
-      {/* Users Table */}
+      {/* User Management */}
       <Card variant="elevated" className="mb-8">
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
           <CardTitle>User Management</CardTitle>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search users..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 w-64"
-            />
+            <Input placeholder="Search users..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 w-64" />
           </div>
         </CardHeader>
         <CardContent>
@@ -196,57 +174,63 @@ const AdminDashboard = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>User</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Last Login</TableHead>
+                  <TableHead>Member #</TableHead>
+                  <TableHead>Role(s)</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-center">Active</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
-                          user.role === "treasurer" 
-                            ? "bg-accent/20 text-accent" 
-                            : user.role === "admin"
-                            ? "bg-destructive/10 text-destructive"
-                            : "bg-primary/10 text-primary"
-                        }`}>
-                          {user.name.charAt(0)}
+                {filteredUsers.map((u) => {
+                  const roles = getRoles(u.user_id);
+                  const hasTreasurer = roles.includes("treasurer");
+                  return (
+                    <TableRow key={u.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${hasTreasurer ? "bg-accent/20 text-accent" : "bg-primary/10 text-primary"}`}>
+                            {u.display_name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-medium">{u.display_name}</p>
+                            <p className="text-sm text-muted-foreground">{u.email}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{user.name}</p>
-                          <p className="text-sm text-muted-foreground">{user.email}</p>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">{u.membership_number || "—"}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-1 flex-wrap">
+                          {roles.map((r) => (
+                            <Badge key={r} variant={r === "treasurer" ? "default" : "secondary"} className="capitalize">{r}</Badge>
+                          ))}
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={user.role === "treasurer" ? "default" : "secondary"}
-                        className="capitalize"
-                      >
-                        {user.role === "treasurer" && <UserCheck className="w-3 h-3 mr-1" />}
-                        {user.role}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{user.lastLogin}</TableCell>
-                    <TableCell>
-                      <span className={`flex items-center gap-1 ${
-                        user.status === "active" ? "text-success" : "text-muted-foreground"
-                      }`}>
-                        <span className={`w-2 h-2 rounded-full ${
-                          user.status === "active" ? "bg-success" : "bg-muted-foreground"
-                        }`} />
-                        {user.status}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Switch checked={user.status === "active"} />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`flex items-center gap-1 ${u.status === "active" ? "text-success" : u.status === "pending" ? "text-warning" : "text-muted-foreground"}`}>
+                          <span className={`w-2 h-2 rounded-full ${u.status === "active" ? "bg-success" : u.status === "pending" ? "bg-warning" : "bg-muted-foreground"}`} />
+                          {u.status}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">Actions</Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {u.status === "active" || u.status === "suspended" ? (
+                              <DropdownMenuItem onClick={() => toggleMemberStatus(u.id, u.status)}>
+                                {u.status === "active" ? "Suspend" : "Activate"}
+                              </DropdownMenuItem>
+                            ) : null}
+                            <DropdownMenuItem onClick={() => toggleTreasurerRole(u.user_id, hasTreasurer)}>
+                              {hasTreasurer ? "Remove Treasurer" : "Make Treasurer"}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -256,42 +240,38 @@ const AdminDashboard = () => {
       {/* Audit Logs */}
       <Card variant="bordered">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Audit Logs
-          </CardTitle>
-          <Button variant="outline" size="sm">
-            <Eye className="w-4 h-4 mr-2" />
-            View All
+          <CardTitle className="flex items-center gap-2"><FileText className="w-5 h-5" /> Audit Logs</CardTitle>
+          <Button variant="outline" size="sm" onClick={exportAuditLogs}>
+            <Download className="w-4 h-4 mr-2" /> Export CSV
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Performed By</TableHead>
-                  <TableHead>Target</TableHead>
-                  <TableHead>Details</TableHead>
-                  <TableHead>Timestamp</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {auditLogs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="font-medium">{log.action}</TableCell>
-                    <TableCell>{log.user}</TableCell>
-                    <TableCell>{log.target}</TableCell>
-                    <TableCell className="text-muted-foreground">{log.amount}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {new Date(log.timestamp).toLocaleString("en-KE")}
-                    </TableCell>
+          {auditLogs.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">No audit logs yet</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Table</TableHead>
+                    <TableHead>Timestamp</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {auditLogs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell className="font-medium">{log.action}</TableCell>
+                      <TableCell className="text-muted-foreground">{log.table_name || "—"}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {new Date(log.created_at).toLocaleString("en-KE")}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </DashboardLayout>
