@@ -111,6 +111,7 @@ export const useMyGuarantorRequests = () => {
         return {
           ...req,
           loan_amount: Number(loan?.amount || 0),
+          loan_member_id: loan?.member_id || "",
           borrower_name: borrower?.display_name || "Unknown",
           borrower_membership: borrower?.membership_number || "",
         };

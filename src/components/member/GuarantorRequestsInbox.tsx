@@ -111,7 +111,7 @@ const GuarantorRequestsInbox = () => {
                 <Button
                   variant="destructive"
                   className="flex-1"
-                  onClick={() => handleRespond(req.id, req.loan?.member_id || "", "declined")}
+                  onClick={() => handleRespond(req.id, req.loan_member_id, "declined")}
                   disabled={processingId === req.id}
                 >
                   <XCircle className="w-4 h-4 mr-2" />
