@@ -171,7 +171,7 @@ const MemberUpdateModal = ({ open, onOpenChange, member }: MemberUpdateModalProp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="w-full max-w-md sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl">Update Member Records</DialogTitle>
           <DialogDescription>
@@ -181,7 +181,7 @@ const MemberUpdateModal = ({ open, onOpenChange, member }: MemberUpdateModalProp
         </DialogHeader>
 
         <div className="p-4 rounded-xl bg-muted/50 mb-4">
-          <div className="grid grid-cols-3 gap-4 text-center">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
             <div>
               <p className="text-xs text-muted-foreground">Invested</p>
               <p className="font-semibold text-primary">KES {member.totalInvested.toLocaleString()}</p>

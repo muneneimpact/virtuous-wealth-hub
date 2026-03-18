@@ -61,10 +61,20 @@ const LoanApprovalModal = ({ open, onOpenChange, loan, availableBalance, minimum
   }));
   const allGuarantorsValid = guarantorValidations.every((g) => g.isValid);
 
+  // New: Calculate 4 eligibility rules
+  const rule1_maxLoan = loan.member_savings * 5;
+  const rule1_valid = Number(loan.amount) <= rule1_maxLoan;
+  
+  const rule2_valid = loan.guarantors.length > 0 || Number(loan.amount) <= loan.member_savings * 0.8;
+  
+  const rule3_valid = isGuaranteeValid && allGuarantorsValid;
+  
   const fee = parseFloat(processingFee) || 0;
   const disbursementAmount = deductFromLoan ? Number(loan.amount) - fee : Number(loan.amount);
   const balanceAfterDisbursement = availableBalance - disbursementAmount;
-  const canDisburse = balanceAfterDisbursement >= minimumBalance;
+  const rule4_valid = balanceAfterDisbursement >= minimumBalance;
+
+  const canDisburse = rule1_valid && rule2_valid && rule3_valid && rule4_valid;
 
   const interestAmount = Number(loan.amount) * 0.05;
 
@@ -142,7 +152,7 @@ const LoanApprovalModal = ({ open, onOpenChange, loan, availableBalance, minimum
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-full max-w-md sm:max-w-lg md:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl">Review Loan Request</DialogTitle>
           <DialogDescription>Verify guarantor information and decide on this loan request.</DialogDescription>
@@ -157,7 +167,7 @@ const LoanApprovalModal = ({ open, onOpenChange, loan, availableBalance, minimum
               </div>
               <Badge variant="secondary">{new Date(loan.created_at || "").toLocaleDateString("en-KE")}</Badge>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <div><p className="text-muted-foreground">Loan Amount</p><p className="font-semibold text-lg">KES {Number(loan.amount).toLocaleString()}</p></div>
               <div><p className="text-muted-foreground">Savings</p><p className="font-semibold">KES {loan.member_savings.toLocaleString()}</p></div>
               <div><p className="text-muted-foreground">Max (5x)</p><p className="font-semibold text-accent">KES {(loan.member_savings * 5).toLocaleString()}</p></div>
@@ -184,14 +194,99 @@ const LoanApprovalModal = ({ open, onOpenChange, loan, availableBalance, minimum
             ))}
           </div>
 
-          <div className={`p-4 rounded-xl border ${canDisburse ? "bg-success/5 border-success/20" : "bg-destructive/5 border-destructive/20"}`}>
-            <div className="flex items-center gap-2 mb-3"><Banknote className="w-5 h-5" /><span className="font-semibold">Balance Check</span></div>
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div><p className="text-muted-foreground">Available</p><p className="font-semibold">KES {availableBalance.toLocaleString()}</p></div>
-              <div><p className="text-muted-foreground">After Disbursement</p><p className={`font-semibold ${canDisburse ? "text-success" : "text-destructive"}`}>KES {balanceAfterDisbursement.toLocaleString()}</p></div>
-              <div><p className="text-muted-foreground">Minimum</p><p className="font-semibold">KES {minimumBalance.toLocaleString()}</p></div>
+          {/* Eligibility Rules */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-3">
+              <Calculator className="w-5 h-5" />
+              <span className="font-semibold">Loan Eligibility Requirements</span>
             </div>
-            {!canDisburse && <p className="text-sm text-destructive mt-3 flex items-center gap-1"><AlertTriangle className="w-4 h-4" /> Balance would drop below minimum.</p>}
+            
+            {/* Rule 1: Max Loan */}
+            <div className={`p-4 rounded-lg border ${rule1_valid ? "bg-green-50 border-green-300" : "bg-red-50 border-red-300"}`}>
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  {rule1_valid ? <CheckCircle2 className="w-5 h-5 text-green-600" /> : <XCircle className="w-5 h-5 text-red-600" />}
+                  <p className="font-semibold text-sm">Rule 1: Maximum Loan Amount (5x Savings)</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4 text-sm ml-7">
+                <div>
+                  <p className="text-muted-foreground">Savings</p>
+                  <p className="font-semibold">KES {loan.member_savings.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Max Eligible</p>
+                  <p className="font-semibold">KES {rule1_maxLoan.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Requested</p>
+                  <p className={`font-semibold ${rule1_valid ? "text-green-600" : "text-red-600"}`}>KES {Number(loan.amount).toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Rule 2: Guarantors or Self-Guarantee */}
+            <div className={`p-4 rounded-lg border ${rule2_valid ? "bg-green-50 border-green-300" : "bg-red-50 border-red-300"}`}>
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  {rule2_valid ? <CheckCircle2 className="w-5 h-5 text-green-600" /> : <XCircle className="w-5 h-5 text-red-600" />}
+                  <p className="font-semibold text-sm">Rule 2: Guarantorship (Guarantors OR Self-Guarantee)</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground ml-7">
+                {loan.guarantors.length > 0 ? `✓ ${loan.guarantors.length} guarantor(s) added` : "✓ Small loan - self-guarantee eligible"}
+              </p>
+            </div>
+
+            {/* Rule 3: Guarantor Capacity */}
+            <div className={`p-4 rounded-lg border ${rule3_valid ? "bg-green-50 border-green-300" : "bg-red-50 border-red-300"}`}>
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  {rule3_valid ? <CheckCircle2 className="w-5 h-5 text-green-600" /> : <XCircle className="w-5 h-5 text-red-600" />}
+                  <p className="font-semibold text-sm">Rule 3: Guarantor Capacity Validation</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4 text-sm ml-7">
+                <div>
+                  <p className="text-muted-foreground">Total Guaranteed</p>
+                  <p className="font-semibold">KES {totalGuarantee.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Required (80%)</p>
+                  <p className="font-semibold">KES {requiredGuarantee.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Status</p>
+                  <p className={`font-semibold ${isGuaranteeValid && allGuarantorsValid ? "text-green-600" : "text-red-600"}`}>
+                    {isGuaranteeValid ? "✓ Valid" : "✗ Invalid"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Rule 4: Bank Balance */}
+            <div className={`p-4 rounded-lg border ${rule4_valid ? "bg-green-50 border-green-300" : "bg-red-50 border-red-300"}`}>
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  {rule4_valid ? <CheckCircle2 className="w-5 h-5 text-green-600" /> : <XCircle className="w-5 h-5 text-red-600" />}
+                  <p className="font-semibold text-sm">Rule 4: Minimum Bank Balance</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4 text-sm ml-7">
+                <div>
+                  <p className="text-muted-foreground">Current Balance</p>
+                  <p className="font-semibold">KES {availableBalance.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">After Disbursement</p>
+                  <p className={`font-semibold ${rule4_valid ? "text-green-600" : "text-red-600"}`}>KES {balanceAfterDisbursement.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Minimum Required</p>
+                  <p className="font-semibold">KES {minimumBalance.toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -219,12 +314,25 @@ const LoanApprovalModal = ({ open, onOpenChange, loan, availableBalance, minimum
           </div>
         </div>
 
-        <DialogFooter className="flex gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button variant="destructive" onClick={handleReject} disabled={isProcessing}><XCircle className="w-4 h-4 mr-2" /> Reject</Button>
-          <Button variant="gold" onClick={handleApprove} disabled={!canDisburse || !isGuaranteeValid || !allGuarantorsValid || isProcessing}>
-            {isProcessing ? <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Processing...</span> : <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Approve & Disburse</span>}
-          </Button>
+        <DialogFooter className="flex gap-2 flex-col md:flex-row">
+          {!canDisburse && (
+            <div className="w-full text-xs text-red-600 p-3 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span>
+                Cannot approve: {!rule1_valid && "Max loan exceeded"}{!rule1_valid && (rule2_valid || rule3_valid || rule4_valid) && ", "}
+                {!rule2_valid && "No guarantors/self-guarantee"}{!rule2_valid && (rule3_valid || rule4_valid) && ", "}
+                {!rule3_valid && "Guarantor validation failed"}{!rule3_valid && rule4_valid && ", "}
+                {!rule4_valid && "Bank balance insufficient"}
+              </span>
+            </div>
+          )}
+          <div className="flex gap-2 w-full">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">Cancel</Button>
+            <Button variant="destructive" onClick={handleReject} disabled={isProcessing} className="flex-1"><XCircle className="w-4 h-4 mr-2" /> Reject</Button>
+            <Button variant="gold" onClick={handleApprove} disabled={!canDisburse || isProcessing} className="flex-1">
+              {isProcessing ? <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Processing...</span> : <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Approve & Disburse</span>}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -57,7 +57,7 @@ const PendingLoanRequests = ({ requests, onReviewRequest }: PendingLoanRequestsP
 
             return (
               <div key={request.id} className="p-4 rounded-xl bg-background border hover:border-accent/50 transition-colors">
-                <div className="flex items-start justify-between mb-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary">
                       {request.member_name.charAt(0)}

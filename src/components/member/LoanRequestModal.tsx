@@ -43,6 +43,7 @@ const LoanRequestModal = ({
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [loanAmount, setLoanAmount] = useState("");
+  const [repaymentMonths, setRepaymentMonths] = useState("12");
   const [guarantors, setGuarantors] = useState<GuarantorEntry[]>([]);
   const [lookupNumber, setLookupNumber] = useState("");
   const [isLooking, setIsLooking] = useState(false);
@@ -55,7 +56,19 @@ const LoanRequestModal = ({
 
   const maxEligibility = totalSavings * 5;
   const parsedAmount = parseFloat(loanAmount) || 0;
-  const estimatedInterest = (parsedAmount * interestRate) / 100;
+  const parsedMonths = parseInt(repaymentMonths) || 12;
+  
+  // Calculate tiered interest rate
+  let tieredInterestRate = interestRate; // Default 5% monthly
+  if (parsedMonths >= 6 && parsedAmount > 50000) {
+    tieredInterestRate = 1.5; // 18% per annum = 1.5% monthly
+  }
+  
+  // Calculate total interest based on repayment months
+  const estimatedInterest = (parsedAmount * tieredInterestRate * parsedMonths) / 100;
+  const totalLoanCost = parsedAmount + estimatedInterest;
+  const monthlyPayment = totalLoanCost / parsedMonths;
+  
   const totalGuarantee = guarantors.reduce((sum, g) => sum + (parseFloat(g.amount) || 0), 0);
   const isAmountValid = parsedAmount > 0 && parsedAmount <= maxLoanAmount;
 
@@ -198,7 +211,11 @@ const LoanRequestModal = ({
           member_id: user.id, 
           amount: parsedAmount, 
           status: loanStatus,
-          interest_rate: interestRate 
+          interest_rate: tieredInterestRate,
+          repayment_months: parsedMonths,
+          total_interest: estimatedInterest,
+          total_cost: totalLoanCost,
+          monthly_payment: monthlyPayment,
         })
         .select()
         .single();
@@ -244,13 +261,14 @@ const LoanRequestModal = ({
 
   const resetForm = () => {
     setLoanAmount("");
+    setRepaymentMonths("12");
     setGuarantors([]);
     setLookupNumber("");
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-full max-w-md sm:max-w-lg md:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl">Request a Loan</DialogTitle>
           <DialogDescription>
@@ -265,7 +283,7 @@ const LoanRequestModal = ({
               <Calculator className="w-5 h-5 text-accent" />
               <span className="font-semibold">Your Loan Eligibility</span>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <div>
                 <p className="text-muted-foreground">Savings</p>
                 <p className="font-semibold">KES {totalSavings.toLocaleString()}</p>
@@ -285,26 +303,59 @@ const LoanRequestModal = ({
             </div>
           </div>
 
-          {/* Amount */}
-          <div className="space-y-2">
-            <Label>Loan Amount (KES)</Label>
-            <Input type="number" placeholder="Enter amount" value={loanAmount} onChange={(e) => setLoanAmount(e.target.value)} max={maxLoanAmount} />
-            {loanAmount && !isAmountValid && parsedAmount > maxLoanAmount && (
-              <p className="text-sm text-destructive flex items-center gap-1">
-                <AlertTriangle className="w-4 h-4" /> Exceeds maximum eligible
+          {/* Amount and Repayment Months */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Loan Amount (KES)</Label>
+              <Input type="number" placeholder="Enter amount" value={loanAmount} onChange={(e) => setLoanAmount(e.target.value)} max={maxLoanAmount} />
+              {loanAmount && !isAmountValid && parsedAmount > maxLoanAmount && (
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertTriangle className="w-4 h-4" /> Exceeds maximum eligible
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Repayment Period (Months)</Label>
+              <select 
+                value={repaymentMonths} 
+                onChange={(e) => setRepaymentMonths(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+              >
+                <option value="3">3 months</option>
+                <option value="6">6 months</option>
+                <option value="12">12 months</option>
+                <option value="18">18 months</option>
+                <option value="24">24 months</option>
+                <option value="36">36 months</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {parsedMonths >= 6 && parsedAmount > 50000 ? "✓ Qualified for reduced interest (18% p.a.)" : ""}
               </p>
-            )}
+            </div>
           </div>
 
           {/* Repayment Info and Self-Guarantee Status */}
           {loanAmount && isAmountValid && (
             <>
               <div className="p-4 rounded-xl bg-muted/50 border">
-                <p className="text-sm text-muted-foreground mb-3">Repayment Summary</p>
-                <div className="grid grid-cols-3 gap-4">
-                  <div><p className="text-xs text-muted-foreground">Principal</p><p className="font-semibold">KES {parsedAmount.toLocaleString()}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Interest ({interestRate}%)</p><p className="font-semibold text-warning">KES {estimatedInterest.toLocaleString()}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Total Due</p><p className="font-semibold text-primary">KES {(parsedAmount + estimatedInterest).toLocaleString()}</p></div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm text-muted-foreground">Repayment Summary</p>
+                  {parsedMonths >= 6 && parsedAmount > 50000 && (
+                    <Badge className="bg-green-600 text-white">Reduced Interest Rate</Badge>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                    <div><p className="text-xs text-muted-foreground">Principal</p><p className="font-semibold">KES {parsedAmount.toLocaleString()}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Rate</p><p className="font-semibold">{tieredInterestRate}%/mo</p></div>
+                    <div><p className="text-xs text-muted-foreground">Period</p><p className="font-semibold">{parsedMonths} months</p></div>
+                    <div><p className="text-xs text-muted-foreground">Total Interest</p><p className="font-semibold text-warning">KES {estimatedInterest.toLocaleString()}</p></div>
+                  </div>
+                  <hr className="border-muted-foreground/20" />
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                    <div><p className="text-xs text-muted-foreground">Total Cost</p><p className="font-display text-lg font-bold">KES {totalLoanCost.toLocaleString()}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Monthly Payment</p><p className="font-semibold text-primary">KES {monthlyPayment.toLocaleString()}</p></div>
+                  </div>
                 </div>
               </div>
 
@@ -378,24 +429,41 @@ const LoanRequestModal = ({
                   const amt = parseFloat(g.amount) || 0;
                   const isValid = amt > 0 && amt <= g.savings;
                   return (
-                    <div key={g.userId} className={`p-4 rounded-lg border ${!isValid && amt > 0 ? "bg-destructive/5 border-destructive/30" : isValid && amt > 0 ? "bg-primary/5 border-primary/30" : "bg-muted/50"}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <p className="font-medium">{g.name} <span className="text-muted-foreground text-xs">#{g.membershipNumber}</span></p>
-                          <p className="text-xs text-muted-foreground">Available Capacity: KES {g.savings.toLocaleString()}</p>
+                    <div key={g.userId} className={`p-4 rounded-lg border transition-colors ${!isValid && amt > 0 ? "bg-red-50 border-red-300" : isValid && amt > 0 ? "bg-green-50 border-green-300" : "bg-muted/50"}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex-1">
+                          <p className="font-semibold text-sm">{g.name}</p>
+                          <p className="text-xs text-muted-foreground">Membership: #{g.membershipNumber}</p>
+                          <div className="mt-2 p-2 rounded bg-muted/50">
+                            <p className="text-xs text-muted-foreground mb-1">Available Capacity</p>
+                            <p className="font-display font-bold text-lg">KES {g.savings.toLocaleString()}</p>
+                          </div>
                         </div>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeGuarantor(g.userId)}>
                           <X className="w-4 h-4" />
                         </Button>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">KES</span>
-                        <Input type="number" placeholder="Amount to guarantee" value={g.amount} onChange={(e) => updateGuarantorAmount(g.userId, e.target.value)} className="flex-1" max={g.savings} />
+                      <div className="space-y-2">
+                        <Label className="text-xs">Guarantee Amount (KES)</Label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">KES</span>
+                          <Input type="number" placeholder="0" value={g.amount} onChange={(e) => updateGuarantorAmount(g.userId, e.target.value)} className={`flex-1 text-lg font-semibold ${!isValid && amt > 0 ? "border-red-500 bg-red-50" : isValid && amt > 0 ? "border-green-500 bg-green-50" : ""}`} max={g.savings} />
+                        </div>
                       </div>
-                      {amt > g.savings && amt > 0 && (
-                        <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3" /> Exceeds member's available capacity
-                        </p>
+                      {amt > 0 && (
+                        <div className="mt-3 p-2 rounded-lg flex items-center gap-2">
+                          {isValid ? (
+                            <>
+                              <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                              <p className="text-xs text-green-700">Valid amount - within capacity</p>
+                            </>
+                          ) : (
+                            <>
+                              <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                              <p className="text-xs text-red-700">Exceeds capacity by KES {(amt - g.savings).toLocaleString()}</p>
+                            </>
+                          )}
+                        </div>
                       )}
                     </div>
                   );

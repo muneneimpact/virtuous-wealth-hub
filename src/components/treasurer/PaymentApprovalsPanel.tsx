@@ -105,6 +105,23 @@ const PaymentApprovalsPanel = () => {
         description: `Payment approved - M-Pesa: ${selectedRequest.mpesa_code || "Message verified"}`,
       });
 
+      // Get member's current profile to update savings
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("savings")
+        .eq("user_id", selectedRequest.member_id)
+        .single();
+
+      const currentSavings = profile?.savings || 0;
+      
+      // Update member's savings
+      await supabase
+        .from("profiles")
+        .update({
+          savings: currentSavings + selectedRequest.amount,
+        })
+        .eq("user_id", selectedRequest.member_id);
+
       // Record transaction
       await supabase.from("transactions").insert({
         type: "contribution",
@@ -131,6 +148,8 @@ const PaymentApprovalsPanel = () => {
       queryClient.invalidateQueries({ queryKey: ["all-contributions"] });
       queryClient.invalidateQueries({ queryKey: ["all-transactions"] });
       queryClient.invalidateQueries({ queryKey: ["group-financials"] });
+      queryClient.invalidateQueries({ queryKey: ["my-contributions"] });
+      queryClient.invalidateQueries({ queryKey: ["member-financials"] });
 
       setApprovalDialogOpen(false);
       setSelectedRequest(null);
@@ -222,7 +241,7 @@ const PaymentApprovalsPanel = () => {
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                         <div>
                           <p className="text-muted-foreground flex items-center gap-1">
                             <Calendar className="w-4 h-4" /> Month

@@ -1,0 +1,14 @@
+---
+deployment:
+  targets:
+    public_html:
+      domain: virtuous-wealth-hub.com
+      path: /public_html
+      branch: main
+
+build:
+  - npm install
+  - npm run build
+
+post_deployment:
+  - npm run build

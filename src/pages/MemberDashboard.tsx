@@ -10,6 +10,7 @@ import FinancialOverview from "@/components/dashboard/FinancialOverview";
 import LoanRequestModal from "@/components/member/LoanRequestModal";
 import GuarantorRequestsInbox from "@/components/member/GuarantorRequestsInbox";
 import PaymentSubmissionModal from "@/components/member/PaymentSubmissionModal";
+import TransactionHistory from "@/components/member/TransactionHistory";
 import MemberFinancialSummary from "@/components/member/MemberFinancialSummary";
 import LoanCalculator from "@/components/member/LoanCalculator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,7 +79,7 @@ const MemberDashboard = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         <StatsCard
           title="My Savings"
           value={`KES ${totalSavings.toLocaleString()}`}
@@ -110,7 +111,7 @@ const MemberDashboard = () => {
       </div>
 
       {/* Payment Submission & Loan Request */}
-      <div className="mb-8 grid md:grid-cols-2 gap-6">
+      <div className="mb-8 grid gap-4 sm:grid-cols-2">
         {/* Submit Payment Card */}
         <Card variant="bordered" className="bg-gradient-to-r from-success/5 to-success/10">
           <CardContent className="py-6">
@@ -179,7 +180,7 @@ const MemberDashboard = () => {
         </div>
       )}
 
-      <div className="grid lg:grid-cols-3 gap-8">
+      <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-8">
           <ProgressCard title="Group Investment Progress" current={gfTotalContributions} target={investmentTarget} />
 
@@ -297,6 +298,11 @@ const MemberDashboard = () => {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Transaction History Section */}
+      <div className="mb-8">
+        <TransactionHistory />
       </div>
 
       <LoanRequestModal

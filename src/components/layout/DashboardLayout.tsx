@@ -150,7 +150,7 @@ const DashboardLayout = ({ children, title, subtitle, role }: DashboardLayoutPro
             <NotificationBell />
           </div>
         </header>
-        <div className="p-4 lg:p-8">{children}</div>
+        <div className="p-3 sm:p-6 lg:p-8">{children}</div>
       </main>
     </div>
   );

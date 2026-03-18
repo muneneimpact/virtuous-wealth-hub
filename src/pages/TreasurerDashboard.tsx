@@ -145,7 +145,7 @@ const TreasurerDashboard = () => {
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 mb-8">
         <StatsCard title="Total Funds" value={`KES ${(gfTotal / 1000).toFixed(0)}K`} subtitle="Collective investment" icon={Wallet} variant="gold" />
         <StatsCard title="Active Members" value={String(groupFinancials?.member_count || 0)} subtitle="Contributing members" icon={Users} variant="default" />
         <StatsCard title="Loans Outstanding" value={`KES ${(gfOutstanding / 1000).toFixed(0)}K`} subtitle={`@ ${interestRate}%/mo`} icon={CreditCard} variant="warning" />

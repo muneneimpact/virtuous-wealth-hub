@@ -91,7 +91,7 @@ const PaymentSubmissionModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="w-full max-w-md sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl">Submit Payment</DialogTitle>
           <DialogDescription>

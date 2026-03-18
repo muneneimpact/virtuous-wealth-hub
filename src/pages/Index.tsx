@@ -57,7 +57,7 @@ const Index = () => {
         </div>
 
         <div className="container mx-auto px-4 pt-20 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid gap-12 lg:grid-cols-2 items-center">
             <div className="animate-slide-up">
               <div className="inline-flex items-center gap-2 bg-accent/20 rounded-full px-4 py-2 mb-6">
                 <Shield className="w-4 h-4 text-accent" />
@@ -142,7 +142,7 @@ const Index = () => {
       {/* Stats Section */}
       <section className="py-16 gradient-primary -mt-1">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8">
             <StatCard value="KES 5M+" label="Target Investment" />
             <StatCard value="10+" label="Active Members" />
             <StatCard value="98%" label="Collection Rate" />
@@ -164,7 +164,7 @@ const Index = () => {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <FeatureCard 
               icon={<PiggyBank className="w-6 h-6 text-primary" />}
               title="Monthly Contributions"
