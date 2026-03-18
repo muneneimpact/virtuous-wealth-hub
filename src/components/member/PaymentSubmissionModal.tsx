@@ -194,8 +194,17 @@ const PaymentSubmissionModal = ({
               disabled={isSubmitting || !amount}
               className="flex-1"
             >
-              <Send className="w-4 h-4 mr-2" />
-              {isSubmitting ? "Submitting..." : "Submit Payment"}
+              {isSubmitting ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Submitting...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Send className="w-4 h-4" />
+                  Submit Payment
+                </span>
+              )}
             </Button>
           </div>
         </div>

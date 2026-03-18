@@ -218,7 +218,17 @@ const MemberUpdateModal = ({ open, onOpenChange, member }: MemberUpdateModalProp
               <Input type="number" placeholder="Enter amount" value={contributionAmount} onChange={(e) => setContributionAmount(e.target.value)} />
             </div>
             <Button variant="gold" className="w-full" onClick={handleAddContribution} disabled={isSaving || !contributionAmount}>
-              {isSaving ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <><Save className="w-4 h-4 mr-2" /> Record Contribution</>}
+              {isSaving ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Saving...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Save className="w-4 h-4" />
+                  Record Contribution
+                </span>
+              )}
             </Button>
           </TabsContent>
 
@@ -235,9 +245,27 @@ const MemberUpdateModal = ({ open, onOpenChange, member }: MemberUpdateModalProp
               <Input type="number" placeholder="Enter amount" value={arrearsAmount} onChange={(e) => setArrearsAmount(e.target.value)} />
             </div>
             <div className="flex gap-2">
-              <Button variant="destructive" className="flex-1" onClick={handleRecordArrears} disabled={isSaving || !arrearsAmount}>Record Arrears</Button>
+              <Button variant="destructive" className="flex-1" onClick={handleRecordArrears} disabled={isSaving || !arrearsAmount}>
+                {isSaving ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    Saving...
+                  </span>
+                ) : (
+                  "Record Arrears"
+                )}
+              </Button>
               {member.arrears > 0 && (
-                <Button variant="outline" className="flex-1" onClick={handleClearArrears} disabled={isSaving}>Clear All</Button>
+                <Button variant="outline" className="flex-1" onClick={handleClearArrears} disabled={isSaving}>
+                  {isSaving ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      Clearing...
+                    </span>
+                  ) : (
+                    "Clear All"
+                  )}
+                </Button>
               )}
             </div>
           </TabsContent>
@@ -255,7 +283,17 @@ const MemberUpdateModal = ({ open, onOpenChange, member }: MemberUpdateModalProp
                   <Input type="number" placeholder="Enter amount" value={repaymentAmount} onChange={(e) => setRepaymentAmount(e.target.value)} max={member.loanBalance} />
                 </div>
                 <Button variant="default" className="w-full" onClick={handleRecordRepayment} disabled={isSaving || !repaymentAmount}>
-                  {isSaving ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <><Save className="w-4 h-4 mr-2" /> Record Repayment</>}
+                  {isSaving ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      Saving...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Save className="w-4 h-4" />
+                      Record Repayment
+                    </span>
+                  )}
                 </Button>
               </>
             ) : (

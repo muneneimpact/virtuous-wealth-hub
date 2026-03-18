@@ -277,8 +277,17 @@ const PaymentApprovalsPanel = () => {
                         className="gap-2"
                         size="sm"
                       >
-                        <CheckCircle2 className="w-4 h-4" />
-                        Approve
+                        {isProcessing ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4" />
+                            Approve
+                          </>
+                        )}
                       </Button>
                       <Button
                         onClick={() => handleRejectClick(request)}
@@ -287,8 +296,17 @@ const PaymentApprovalsPanel = () => {
                         size="sm"
                         className="gap-2"
                       >
-                        <XCircle className="w-4 h-4" />
-                        Reject
+                        {isProcessing ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="w-4 h-4" />
+                            Reject
+                          </>
+                        )}
                       </Button>
                     </div>
                   </div>

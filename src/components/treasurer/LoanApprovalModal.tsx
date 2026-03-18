@@ -327,10 +327,32 @@ const LoanApprovalModal = ({ open, onOpenChange, loan, availableBalance, minimum
             </div>
           )}
           <div className="flex gap-2 w-full">
-            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">Cancel</Button>
-            <Button variant="destructive" onClick={handleReject} disabled={isProcessing} className="flex-1"><XCircle className="w-4 h-4 mr-2" /> Reject</Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isProcessing} className="flex-1">Cancel</Button>
+            <Button variant="destructive" onClick={handleReject} disabled={isProcessing} className="flex-1">
+              {isProcessing ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <XCircle className="w-4 h-4" />
+                  Reject
+                </span>
+              )}
+            </Button>
             <Button variant="gold" onClick={handleApprove} disabled={!canDisburse || isProcessing} className="flex-1">
-              {isProcessing ? <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Processing...</span> : <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Approve & Disburse</span>}
+              {isProcessing ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Approve & Disburse
+                </span>
+              )}
             </Button>
           </div>
         </DialogFooter>
