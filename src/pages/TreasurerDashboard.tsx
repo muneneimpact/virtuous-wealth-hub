@@ -1,20 +1,8 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import {
-  Wallet,
-  Users,
-  CreditCard,
-  TrendingUp,
-  AlertTriangle,
-  PlusCircle,
-  Search,
-  MoreHorizontal,
-  Eye,
-  Edit,
-  CheckCircle2,
-  XCircle,
-  ArrowUpRight,
-  DollarSign,
+  Wallet, Users, CreditCard, TrendingUp, AlertTriangle,
+  Search, MoreHorizontal, ArrowUpRight, DollarSign, Download,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import StatsCard from "@/components/dashboard/StatsCard";
@@ -29,380 +17,217 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  useGroupFinancials, useSettings, useMemberFinancials,
+  usePendingLoans, useAllTransactions, useAllContributions,
+} from "@/hooks/useAppData";
+import { exportToCSV } from "@/lib/exportReports";
+import { useQueryClient } from "@tanstack/react-query";
 
-interface Member {
-  id: number;
-  name: string;
-  email: string;
+interface SelectedMember {
+  user_id: string;
+  display_name: string;
+  email: string | null;
+  membership_number: string | null;
   totalInvested: number;
-  arrears: number;
   loanBalance: number;
+  arrears: number;
   status: string;
-}
-
-interface GuarantorInfo {
-  memberId: number;
-  memberName: string;
-  amount: number;
-  memberSavings: number;
-}
-
-interface LoanRequest {
-  id: number;
-  memberId: number;
-  memberName: string;
-  amount: number;
-  memberSavings: number;
-  guarantors: GuarantorInfo[];
-  requestDate: string;
-  status: "pending" | "approved" | "rejected";
 }
 
 const TreasurerDashboard = () => {
   const location = useLocation();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
-  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const [selectedRequest, setSelectedRequest] = useState<LoanRequest | null>(null);
-  
-  // Settings state
-  const [interestRate] = useState(5); // Fixed at 5% per month
-  const [investmentTarget, setInvestmentTarget] = useState(5000000);
-  const [minimumBalance, setMinimumBalance] = useState(50000);
+  const [selectedMember, setSelectedMember] = useState<SelectedMember | null>(null);
+  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
 
-  // Check if we're on the settings page
+  const { data: groupFinancials } = useGroupFinancials();
+  const { data: settings } = useSettings();
+  const { data: memberFinancials = [] } = useMemberFinancials();
+  const { data: pendingLoans = [] } = usePendingLoans();
+  const { data: recentTransactions = [] } = useAllTransactions();
+  const { data: allContributions = [] } = useAllContributions();
+
   const isSettingsPage = location.pathname === "/treasurer/settings";
 
+  const interestRate = settings?.interest_rate ? Number(settings.interest_rate) : 5;
+  const investmentTarget = settings?.investment_target ? Number(settings.investment_target) : 5000000;
+  const minimumBalance = settings?.minimum_balance ? Number(settings.minimum_balance) : 50000;
 
-  // Mock data
-  const [members, setMembers] = useState<Member[]>([
-    { id: 1, name: "John Mwangi", email: "john@example.com", totalInvested: 28000, arrears: 0, loanBalance: 15000, status: "active" },
-    { id: 2, name: "Mary Wanjiku", email: "mary@example.com", totalInvested: 32000, arrears: 0, loanBalance: 0, status: "active" },
-    { id: 3, name: "James Kamau", email: "james@example.com", totalInvested: 26000, arrears: 4000, loanBalance: 25000, status: "arrears" },
-    { id: 4, name: "Grace Akinyi", email: "grace@example.com", totalInvested: 30000, arrears: 0, loanBalance: 20000, status: "active" },
-    { id: 5, name: "Peter Ochieng", email: "peter@example.com", totalInvested: 28000, arrears: 0, loanBalance: 0, status: "active" },
-    { id: 6, name: "Susan Njeri", email: "susan@example.com", totalInvested: 24000, arrears: 2000, loanBalance: 10000, status: "arrears" },
-  ]);
+  const gfTotal = groupFinancials?.total_contributions || 0;
+  const gfLoans = groupFinancials?.total_loans_disbursed || 0;
+  const gfOutstanding = groupFinancials?.total_loans_outstanding || 0;
+  const availableBalance = gfTotal - gfOutstanding;
+  const totalExpected = gfTotal + gfOutstanding * 0.05;
+  const totalArrears = memberFinancials.reduce((sum, m) => sum + m.arrears, 0);
 
-  // Pending loan requests
-  const [loanRequests, setLoanRequests] = useState<LoanRequest[]>([
-    {
-      id: 1,
-      memberId: 2,
-      memberName: "Mary Wanjiku",
-      amount: 80000,
-      memberSavings: 32000,
-      guarantors: [
-        { memberId: 5, memberName: "Peter Ochieng", amount: 28000, memberSavings: 28000 },
-        { memberId: 4, memberName: "Grace Akinyi", amount: 30000, memberSavings: 30000 },
-        { memberId: 1, memberName: "John Mwangi", amount: 10000, memberSavings: 28000 },
-      ],
-      requestDate: "2024-12-28",
-      status: "pending",
-    },
-    {
-      id: 2,
-      memberId: 5,
-      memberName: "Peter Ochieng",
-      amount: 50000,
-      memberSavings: 28000,
-      guarantors: [
-        { memberId: 2, memberName: "Mary Wanjiku", amount: 32000, memberSavings: 32000 },
-        { memberId: 4, memberName: "Grace Akinyi", amount: 10000, memberSavings: 30000 },
-      ],
-      requestDate: "2024-12-29",
-      status: "pending",
-    },
-  ]);
+  // Monthly chart data from contributions
+  const monthlyData = (() => {
+    const months: Record<string, { contributions: number; loans: number }> = {};
+    allContributions.forEach((c) => {
+      const m = c.month || new Date(c.created_at).toISOString().slice(0, 7);
+      if (!months[m]) months[m] = { contributions: 0, loans: 0 };
+      months[m].contributions += Number(c.amount);
+    });
+    return Object.entries(months)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-6)
+      .map(([month, data]) => ({ month: month.slice(5), ...data }));
+  })();
 
-  // Calculate stats
-  const totalInvestments = members.reduce((sum, m) => sum + m.totalInvested, 0);
-  const totalLoansGiven = members.reduce((sum, m) => sum + m.loanBalance, 0);
-  const totalArrears = members.reduce((sum, m) => sum + m.arrears, 0);
-  const availableBalance = totalInvestments - totalLoansGiven;
-  const totalExpectedAfterLoans = totalInvestments + (totalLoansGiven * 0.05);
-
-  const stats = {
-    totalFunds: totalInvestments,
-    totalLoansIssued: totalLoansGiven,
-    totalArrears: totalArrears,
-    activeMembers: members.length,
-    collectionRate: 96,
-  };
-
-  const monthlyData = [
-    { month: "Oct", contributions: 20000, loans: 5000 },
-    { month: "Nov", contributions: 20000, loans: 15000 },
-    { month: "Dec", contributions: 20000, loans: 10000 },
-    { month: "Jan", contributions: 20000, loans: 20000 },
-    { month: "Feb", contributions: 20000, loans: 8000 },
-    { month: "Mar", contributions: 20000, loans: 12000 },
-  ];
-
-  const recentActivity = [
-    { id: 1, action: "Contribution received", member: "John Mwangi", amount: 2000, time: "2 hours ago" },
-    { id: 2, action: "Loan request", member: "Mary Wanjiku", amount: 80000, time: "5 hours ago" },
-    { id: 3, action: "Arrears recorded", member: "James Kamau", amount: 4000, time: "1 day ago" },
-    { id: 4, action: "Loan repayment", member: "Grace Akinyi", amount: 5000, time: "2 days ago" },
-  ];
-
-  const filteredMembers = members.filter(
-    (member) =>
-      member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.email.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredMembers = memberFinancials.filter(
+    (m) =>
+      m.display_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.email || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.membership_number || "").includes(searchQuery)
   );
 
-  const handleUpdateMember = (updatedMember: Member) => {
-    setMembers((prev) =>
-      prev.map((m) => (m.id === updatedMember.id ? updatedMember : m))
-    );
-    setSelectedMember(updatedMember);
-  };
-
-  const handleOpenUpdateModal = (member: Member) => {
-    setSelectedMember(member);
+  const handleOpenUpdateModal = (m: typeof memberFinancials[0]) => {
+    setSelectedMember({
+      user_id: m.user_id,
+      display_name: m.display_name,
+      email: m.email,
+      membership_number: m.membership_number,
+      totalInvested: m.totalInvested,
+      loanBalance: m.loanBalance,
+      arrears: m.arrears,
+      status: m.status,
+    });
     setUpdateModalOpen(true);
   };
 
-  const handleReviewRequest = (request: LoanRequest) => {
-    setSelectedRequest(request);
+  const handleReviewLoan = (loanId: string) => {
+    setSelectedLoanId(loanId);
     setApprovalModalOpen(true);
   };
 
-  const handleApproveLoan = (requestId: number, processingFee: number, deductFromLoan: boolean) => {
-    setLoanRequests(prev => prev.map(r => 
-      r.id === requestId ? { ...r, status: "approved" as const } : r
-    ));
-    // Update member's loan balance
-    const request = loanRequests.find(r => r.id === requestId);
-    if (request) {
-      setMembers(prev => prev.map(m => 
-        m.id === request.memberId 
-          ? { ...m, loanBalance: m.loanBalance + request.amount }
-          : m
-      ));
-    }
+  const selectedLoan = pendingLoans.find((l) => l.id === selectedLoanId);
+
+  const exportContributions = () => {
+    exportToCSV(
+      allContributions.map((c) => ({
+        Month: c.month, Amount: c.amount, Date: new Date(c.created_at).toLocaleDateString("en-KE"),
+      })),
+      "contributions-report"
+    );
   };
 
-  const handleRejectLoan = (requestId: number, reason: string) => {
-    setLoanRequests(prev => prev.map(r => 
-      r.id === requestId ? { ...r, status: "rejected" as const } : r
-    ));
-  };
-
-  // Render settings page
   if (isSettingsPage) {
     return (
-      <DashboardLayout
-        title="Settings"
-        subtitle="Configure investment targets and system settings"
-        role="treasurer"
-      >
-        <SettingsPanel
-          interestRate={interestRate}
-          investmentTarget={investmentTarget}
-          onUpdateInterestRate={() => {}} // Interest rate is fixed at 5%
-          onUpdateTarget={setInvestmentTarget}
-        />
+      <DashboardLayout title="Settings" subtitle="Configure investment targets and system settings" role="treasurer">
+        <SettingsPanel />
       </DashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout
-      title="Treasurer Dashboard"
-      subtitle="Manage investments, loans, and member finances"
-      role="treasurer"
-    >
-      {/* Financial Overview */}
+    <DashboardLayout title="Treasurer Dashboard" subtitle="Manage investments, loans, and member finances" role="treasurer">
       <div className="mb-8">
         <FinancialOverview
-          totalInvestments={totalInvestments}
-          totalLoansGiven={totalLoansGiven}
-          totalExpectedAfterLoans={totalExpectedAfterLoans}
+          totalInvestments={gfTotal}
+          totalLoansGiven={gfLoans}
+          totalExpectedAfterLoans={totalExpected}
           availableBalance={availableBalance}
           minimumBalance={minimumBalance}
           interestRate={interestRate}
         />
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <StatsCard
-          title="Total Funds"
-          value={`KES ${(stats.totalFunds / 1000).toFixed(0)}K`}
-          subtitle="Collective investment"
-          icon={Wallet}
-          variant="gold"
-          trend={{ value: 12.5, isPositive: true }}
-        />
-        <StatsCard
-          title="Active Members"
-          value={stats.activeMembers.toString()}
-          subtitle="Contributing members"
-          icon={Users}
-          variant="default"
-        />
-        <StatsCard
-          title="Loans Issued"
-          value={`KES ${(stats.totalLoansIssued / 1000).toFixed(0)}K`}
-          subtitle={`@ ${interestRate}%/mo interest`}
-          icon={CreditCard}
-          variant="warning"
-        />
-        <StatsCard
-          title="Total Arrears"
-          value={`KES ${(stats.totalArrears / 1000).toFixed(0)}K`}
-          subtitle="Pending collection"
-          icon={AlertTriangle}
-          variant={stats.totalArrears > 0 ? "danger" : "success"}
-        />
-        <StatsCard
-          title="Collection Rate"
-          value={`${stats.collectionRate}%`}
-          subtitle="This month"
-          icon={TrendingUp}
-          variant="success"
-        />
+        <StatsCard title="Total Funds" value={`KES ${(gfTotal / 1000).toFixed(0)}K`} subtitle="Collective investment" icon={Wallet} variant="gold" />
+        <StatsCard title="Active Members" value={String(groupFinancials?.member_count || 0)} subtitle="Contributing members" icon={Users} variant="default" />
+        <StatsCard title="Loans Outstanding" value={`KES ${(gfOutstanding / 1000).toFixed(0)}K`} subtitle={`@ ${interestRate}%/mo`} icon={CreditCard} variant="warning" />
+        <StatsCard title="Total Arrears" value={`KES ${(totalArrears / 1000).toFixed(0)}K`} subtitle="Pending collection" icon={AlertTriangle} variant={totalArrears > 0 ? "danger" : "success"} />
+        <StatsCard title="Pending Loans" value={pendingLoans.length.toString()} subtitle="Awaiting review" icon={TrendingUp} variant={pendingLoans.length > 0 ? "warning" : "success"} />
       </div>
 
-      {/* Pending Loan Requests */}
-      <div className="mb-8">
-        <PendingLoanRequests
-          requests={loanRequests}
-          onReviewRequest={handleReviewRequest}
-        />
-      </div>
+      {pendingLoans.length > 0 && (
+        <div className="mb-8">
+          <PendingLoanRequests requests={pendingLoans} onReviewRequest={handleReviewLoan} />
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-8 mb-8">
-        {/* Chart */}
         <Card variant="elevated" className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Monthly Overview</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={monthlyData}>
-                  <defs>
-                    <linearGradient id="colorContributions" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(150, 48%, 22%)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(150, 48%, 22%)" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorLoans" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(43, 74%, 49%)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(43, 74%, 49%)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(150, 15%, 85%)" />
-                  <XAxis dataKey="month" stroke="hsl(150, 15%, 40%)" fontSize={12} />
-                  <YAxis stroke="hsl(150, 15%, 40%)" fontSize={12} tickFormatter={(value) => `${value/1000}K`} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(0, 0%, 100%)",
-                      border: "1px solid hsl(150, 15%, 85%)",
-                      borderRadius: "8px",
-                    }}
-                    formatter={(value: number) => [`KES ${value.toLocaleString()}`, ""]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="contributions"
-                    stroke="hsl(150, 48%, 22%)"
-                    fillOpacity={1}
-                    fill="url(#colorContributions)"
-                    name="Contributions"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="loans"
-                    stroke="hsl(43, 74%, 49%)"
-                    fillOpacity={1}
-                    fill="url(#colorLoans)"
-                    name="Loans"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              {monthlyData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={monthlyData}>
+                    <defs>
+                      <linearGradient id="colorContributions" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(150, 48%, 22%)" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(150, 48%, 22%)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(150, 15%, 85%)" />
+                    <XAxis dataKey="month" stroke="hsl(150, 15%, 40%)" fontSize={12} />
+                    <YAxis stroke="hsl(150, 15%, 40%)" fontSize={12} tickFormatter={(v) => `${v / 1000}K`} />
+                    <Tooltip contentStyle={{ backgroundColor: "hsl(0, 0%, 100%)", border: "1px solid hsl(150, 15%, 85%)", borderRadius: "8px" }} formatter={(value: number) => [`KES ${value.toLocaleString()}`, ""]} />
+                    <Area type="monotone" dataKey="contributions" stroke="hsl(150, 48%, 22%)" fillOpacity={1} fill="url(#colorContributions)" name="Contributions" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">No data yet</div>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Recent Activity */}
         <Card variant="elevated">
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Recent Activity</CardTitle></CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
-                  <div className={`p-2 rounded-lg ${
-                    activity.action.includes("received") || activity.action.includes("repayment")
-                      ? "bg-success/10 text-success"
-                      : activity.action.includes("Arrears")
-                      ? "bg-destructive/10 text-destructive"
-                      : "bg-accent/10 text-accent"
-                  }`}>
-                    {activity.action.includes("received") || activity.action.includes("repayment") ? (
-                      <ArrowUpRight className="w-4 h-4" />
-                    ) : activity.action.includes("Arrears") ? (
-                      <AlertTriangle className="w-4 h-4" />
-                    ) : (
-                      <DollarSign className="w-4 h-4" />
-                    )}
+            {recentTransactions.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No activity yet</p>
+            ) : (
+              <div className="space-y-3">
+                {recentTransactions.slice(0, 5).map((t) => (
+                  <div key={t.id} className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
+                    <div className={`p-2 rounded-lg ${Number(t.amount) > 0 ? "bg-success/10 text-success" : "bg-accent/10 text-accent"}`}>
+                      {Number(t.amount) > 0 ? <ArrowUpRight className="w-4 h-4" /> : <DollarSign className="w-4 h-4" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm capitalize">{t.type.replace(/_/g, " ")}</p>
+                      <p className="text-xs text-muted-foreground">{(t as any).member_name || ""}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(t.created_at).toLocaleDateString("en-KE")}</p>
+                    </div>
+                    <span className="text-sm font-semibold">KES {Math.abs(Number(t.amount)).toLocaleString()}</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm">{activity.action}</p>
-                    <p className="text-xs text-muted-foreground">{activity.member}</p>
-                    <p className="text-xs text-muted-foreground">{activity.time}</p>
-                  </div>
-                  <span className="text-sm font-semibold">
-                    KES {activity.amount.toLocaleString()}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Group Progress */}
       <div className="mb-8">
-        <ProgressCard title="Investment Target Progress" current={stats.totalFunds} target={investmentTarget} />
+        <ProgressCard title="Investment Target Progress" current={gfTotal} target={investmentTarget} />
       </div>
 
-      {/* Members Table */}
       <Card variant="elevated">
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
           <CardTitle>Members Overview</CardTitle>
           <div className="flex items-center gap-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search members..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 w-64"
-              />
+              <Input placeholder="Search members..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 w-64" />
             </div>
-            <Button variant="gold">
-              <PlusCircle className="w-4 h-4 mr-2" />
-              Add Member
+            <Button variant="outline" size="sm" onClick={exportContributions}>
+              <Download className="w-4 h-4 mr-2" /> Export
             </Button>
           </div>
         </CardHeader>
@@ -421,95 +246,66 @@ const TreasurerDashboard = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredMembers.map((member) => (
-                  <TableRow key={member.id} className="hover:bg-muted/50">
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center font-semibold text-primary">
-                          {member.name.charAt(0)}
+                {filteredMembers.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No members found</TableCell></TableRow>
+                ) : (
+                  filteredMembers.map((m) => (
+                    <TableRow key={m.id} className="hover:bg-muted/50">
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center font-semibold text-primary">
+                            {m.display_name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-medium">{m.display_name}</p>
+                            <p className="text-xs text-muted-foreground font-mono">#{m.membership_number}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{member.name}</p>
-                          <p className="text-sm text-muted-foreground">{member.email}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      KES {member.totalInvested.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right text-accent font-semibold">
-                      KES {(member.totalInvested * 5).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <span className={member.arrears > 0 ? "text-destructive font-medium" : "text-success"}>
-                        {member.arrears > 0 ? `KES ${member.arrears.toLocaleString()}` : "None"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {member.loanBalance > 0 ? (
-                        <span className="text-warning font-medium">
-                          KES {member.loanBalance.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">KES {m.totalInvested.toLocaleString()}</TableCell>
+                      <TableCell className="text-right text-accent font-semibold">KES {(m.totalInvested * 5).toLocaleString()}</TableCell>
+                      <TableCell className="text-right">
+                        <span className={m.arrears > 0 ? "text-destructive font-medium" : "text-success"}>
+                          {m.arrears > 0 ? `KES ${m.arrears.toLocaleString()}` : "None"}
                         </span>
-                      ) : (
-                        <span className="text-muted-foreground">None</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={member.status === "active" ? "default" : "destructive"}
-                        className="capitalize"
-                      >
-                        {member.status === "active" ? (
-                          <CheckCircle2 className="w-3 h-3 mr-1" />
-                        ) : (
-                          <XCircle className="w-3 h-3 mr-1" />
-                        )}
-                        {member.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <Eye className="w-4 h-4 mr-2" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleOpenUpdateModal(member)}>
-                            <Edit className="w-4 h-4 mr-2" />
-                            Update Records
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {m.loanBalance > 0 ? <span className="text-warning font-medium">KES {m.loanBalance.toLocaleString()}</span> : <span className="text-muted-foreground">None</span>}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={m.arrears > 0 ? "destructive" : "default"} className="capitalize">{m.arrears > 0 ? "arrears" : m.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon"><MoreHorizontal className="w-4 h-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleOpenUpdateModal(m)}>Update Records</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
 
-      {/* Modals */}
       <MemberUpdateModal
         open={updateModalOpen}
         onOpenChange={setUpdateModalOpen}
         member={selectedMember}
-        onUpdate={handleUpdateMember}
       />
 
       <LoanApprovalModal
         open={approvalModalOpen}
         onOpenChange={setApprovalModalOpen}
-        request={selectedRequest}
+        loan={selectedLoan || null}
         availableBalance={availableBalance}
         minimumBalance={minimumBalance}
-        onApprove={handleApproveLoan}
-        onReject={handleRejectLoan}
       />
     </DashboardLayout>
   );

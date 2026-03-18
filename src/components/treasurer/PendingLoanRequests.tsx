@@ -1,49 +1,32 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Clock, 
-  User, 
-  Users, 
-  ArrowRight, 
-  CheckCircle2,
-  AlertTriangle 
-} from "lucide-react";
+import { Clock, Users, ArrowRight, CheckCircle2, AlertTriangle } from "lucide-react";
 
-interface GuarantorInfo {
-  memberId: number;
-  memberName: string;
+interface PendingLoan {
+  id: string;
   amount: number;
-  memberSavings: number;
-}
-
-interface LoanRequest {
-  id: number;
-  memberId: number;
-  memberName: string;
-  amount: number;
-  memberSavings: number;
-  guarantors: GuarantorInfo[];
-  requestDate: string;
-  status: "pending" | "approved" | "rejected";
+  member_name: string;
+  member_savings: number;
+  created_at?: string;
+  guarantors: Array<{
+    id: string;
+    amount: number;
+    guarantor_name: string;
+  }>;
 }
 
 interface PendingLoanRequestsProps {
-  requests: LoanRequest[];
-  onReviewRequest: (request: LoanRequest) => void;
+  requests: PendingLoan[];
+  onReviewRequest: (loanId: string) => void;
 }
 
 const PendingLoanRequests = ({ requests, onReviewRequest }: PendingLoanRequestsProps) => {
-  const pendingRequests = requests.filter(r => r.status === "pending");
-
-  if (pendingRequests.length === 0) {
+  if (requests.length === 0) {
     return (
       <Card variant="bordered">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            Pending Loan Requests
-          </CardTitle>
+          <CardTitle className="flex items-center gap-2"><Clock className="w-5 h-5" /> Pending Loan Requests</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-muted-foreground">
@@ -59,49 +42,38 @@ const PendingLoanRequests = ({ requests, onReviewRequest }: PendingLoanRequestsP
     <Card variant="gold">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            Pending Loan Requests
-          </span>
-          <Badge variant="secondary">{pendingRequests.length} pending</Badge>
+          <span className="flex items-center gap-2"><Clock className="w-5 h-5" /> Pending Loan Requests</span>
+          <Badge variant="secondary">{requests.length} pending</Badge>
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {pendingRequests.map((request) => {
-            const totalGuarantee = request.guarantors.reduce((sum, g) => sum + g.amount, 0);
-            const requiredGuarantee = request.amount * 0.8;
+          {requests.map((request) => {
+            const totalGuarantee = request.guarantors.reduce((sum, g) => sum + Number(g.amount), 0);
+            const requiredGuarantee = Number(request.amount) * 0.8;
             const isGuaranteeValid = totalGuarantee >= requiredGuarantee;
-            const maxLoan = request.memberSavings * 5;
-            const isAmountValid = request.amount <= maxLoan;
+            const maxLoan = request.member_savings * 5;
+            const isAmountValid = Number(request.amount) <= maxLoan;
 
             return (
-              <div
-                key={request.id}
-                className="p-4 rounded-xl bg-background border hover:border-accent/50 transition-colors"
-              >
+              <div key={request.id} className="p-4 rounded-xl bg-background border hover:border-accent/50 transition-colors">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary">
-                      {request.memberName.charAt(0)}
+                      {request.member_name.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-semibold">{request.memberName}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Savings: KES {request.memberSavings.toLocaleString()}
-                      </p>
+                      <p className="font-semibold">{request.member_name}</p>
+                      <p className="text-sm text-muted-foreground">Savings: KES {request.member_savings.toLocaleString()}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-display text-xl font-bold">
-                      KES {request.amount.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(request.requestDate).toLocaleDateString("en-KE")}
-                    </p>
+                    <p className="font-display text-xl font-bold">KES {Number(request.amount).toLocaleString()}</p>
+                    {request.created_at && (
+                      <p className="text-xs text-muted-foreground">{new Date(request.created_at).toLocaleDateString("en-KE")}</p>
+                    )}
                   </div>
                 </div>
-
                 <div className="flex flex-wrap gap-2 mb-3">
                   <Badge variant={isAmountValid ? "default" : "destructive"}>
                     {isAmountValid ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
@@ -109,21 +81,15 @@ const PendingLoanRequests = ({ requests, onReviewRequest }: PendingLoanRequestsP
                   </Badge>
                   <Badge variant={isGuaranteeValid ? "default" : "destructive"}>
                     <Users className="w-3 h-3 mr-1" />
-                    {request.guarantors.length} guarantors ({((totalGuarantee / request.amount) * 100).toFixed(0)}%)
+                    {request.guarantors.length} guarantors ({Number(request.amount) > 0 ? ((totalGuarantee / Number(request.amount)) * 100).toFixed(0) : 0}%)
                   </Badge>
                 </div>
-
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-muted-foreground">
                     Guarantee: KES {totalGuarantee.toLocaleString()} / {requiredGuarantee.toLocaleString()}
                   </div>
-                  <Button 
-                    variant="gold" 
-                    size="sm"
-                    onClick={() => onReviewRequest(request)}
-                  >
-                    Review
-                    <ArrowRight className="w-4 h-4 ml-1" />
+                  <Button variant="gold" size="sm" onClick={() => onReviewRequest(request.id)}>
+                    Review <ArrowRight className="w-4 h-4 ml-1" />
                   </Button>
                 </div>
               </div>

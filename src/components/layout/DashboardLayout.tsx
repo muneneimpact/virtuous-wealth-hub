@@ -2,10 +2,11 @@ import { ReactNode, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Wallet, CreditCard, Users, History,
-  Settings, LogOut, TrendingUp, Shield, ChevronRight, Menu, Bell,
+  Settings, LogOut, TrendingUp, Shield, ChevronRight, Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import NotificationBell from "@/components/notifications/NotificationBell";
 import logo from "@/assets/logo.png";
 
 interface NavItem {
@@ -53,6 +54,7 @@ const DashboardLayout = ({ children, title, subtitle, role }: DashboardLayoutPro
 
   const navItems = role === "admin" ? adminNav : role === "treasurer" ? treasurerNav : memberNav;
   const userName = profile?.display_name || "User";
+  const logoHref = role === "admin" ? "/admin" : role === "treasurer" ? "/treasurer" : "/dashboard";
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -70,7 +72,7 @@ const DashboardLayout = ({ children, title, subtitle, role }: DashboardLayoutPro
       >
         <div className="flex flex-col h-full">
           <div className="p-6 border-b border-primary-foreground/10">
-            <Link to="/" className="flex items-center gap-3">
+            <Link to={logoHref} className="flex items-center gap-3">
               <img src={logo} alt="Logo" className="w-10 h-10" />
               <div>
                 <h1 className="font-display text-lg font-semibold text-primary-foreground">
@@ -145,9 +147,7 @@ const DashboardLayout = ({ children, title, subtitle, role }: DashboardLayoutPro
                 {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
               </div>
             </div>
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="w-5 h-5" />
-            </Button>
+            <NotificationBell />
           </div>
         </header>
         <div className="p-4 lg:p-8">{children}</div>
