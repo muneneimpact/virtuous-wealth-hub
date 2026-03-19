@@ -147,12 +147,11 @@ const LoanRequestModal = ({
         return;
       }
 
-      // Get their savings and existing guarantees
-      const { data: contribs } = await supabase
-        .from("contributions")
-        .select("amount")
-        .eq("member_id", member.user_id);
-      const savings = (contribs || []).reduce((sum, c) => sum + Number(c.amount), 0);
+      // Get their savings using security definer RPC
+      const { data: savingsData } = await supabase.rpc("get_member_savings", {
+        _user_id: member.user_id,
+      });
+      const savings = Number(savingsData) || 0;
 
       // Get existing guarantees
       const { data: guaranteeData } = await supabase

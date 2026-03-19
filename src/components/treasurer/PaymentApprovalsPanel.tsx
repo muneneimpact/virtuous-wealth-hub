@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Card, CardContent, CardHeader, CardTitle, CardDescription,
+  Card, CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  CheckCircle2, XCircle, Clock, CreditCard, User, Calendar, MessageSquare,
+  CheckCircle2, XCircle, Clock, User, Calendar, MessageSquare,
 } from "lucide-react";
 
 interface PaymentRequest {
@@ -24,7 +24,7 @@ interface PaymentRequest {
   payment_date: string;
   mpesa_code: string | null;
   mpesa_message: string | null;
-  status: "pending" | "approved" | "rejected";
+  status: string;
   rejection_reason: string | null;
   submitted_at: string;
   member_name?: string;
@@ -41,36 +41,32 @@ const PaymentApprovalsPanel = () => {
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
 
-  // Fetch payment requests
   const { data: paymentRequests = [] } = useQuery({
     queryKey: ["payment-requests"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("payment_requests")
+      const { data, error } = await (supabase.from("payment_requests") as any)
         .select("*")
         .order("submitted_at", { ascending: false });
 
       if (error) throw error;
 
-      // Get member names
-      const memberIds = [...new Set(data?.map((p) => p.member_id) || [])];
+      const memberIds = [...new Set((data || []).map((p: any) => p.member_id))];
       let profiles: any[] = [];
       if (memberIds.length > 0) {
         const { data: profileData } = await supabase
           .from("profiles")
           .select("user_id, display_name")
-          .in("user_id", memberIds);
+          .in("user_id", memberIds as string[]);
         profiles = profileData || [];
       }
 
       const memberMap = Object.fromEntries(profiles.map((p) => [p.user_id, p.display_name]));
-      return data?.map((p) => ({ ...p, member_name: memberMap[p.member_id] || "Unknown" })) || [];
+      return (data || []).map((p: any) => ({ ...p, member_name: memberMap[p.member_id] || "Unknown" })) as PaymentRequest[];
     },
   });
 
   const pendingRequests = paymentRequests.filter((p) => p.status === "pending");
   const approvedRequests = paymentRequests.filter((p) => p.status === "approved");
-  const rejectedRequests = paymentRequests.filter((p) => p.status === "rejected");
 
   const handleApproveClick = (request: PaymentRequest) => {
     setSelectedRequest(request);
@@ -87,9 +83,7 @@ const PaymentApprovalsPanel = () => {
     setIsProcessing(true);
 
     try {
-      // Update payment request status
-      await supabase
-        .from("payment_requests")
+      await (supabase.from("payment_requests") as any)
         .update({
           status: "approved",
           reviewed_by: user!.id,
@@ -102,21 +96,20 @@ const PaymentApprovalsPanel = () => {
         member_id: selectedRequest.member_id,
         amount: selectedRequest.amount,
         month: selectedRequest.payment_month,
-        description: `Payment approved - M-Pesa: ${selectedRequest.mpesa_code || "Message verified"}`,
+        notes: `Payment approved - M-Pesa: ${selectedRequest.mpesa_code || "Message verified"}`,
+        recorded_by: user!.id,
       });
 
-      // Get member's current profile to update savings
+      // Update member's savings
       const { data: profile } = await supabase
         .from("profiles")
-        .select("savings")
+        .select("user_id, savings")
         .eq("user_id", selectedRequest.member_id)
         .single();
 
-      const currentSavings = profile?.savings || 0;
+      const currentSavings = (profile as any)?.savings || 0;
       
-      // Update member's savings
-      await supabase
-        .from("profiles")
+      await (supabase.from("profiles") as any)
         .update({
           savings: currentSavings + selectedRequest.amount,
         })
@@ -132,16 +125,16 @@ const PaymentApprovalsPanel = () => {
       });
 
       // Create notification
-      await supabase.from("notifications").insert({
+      await (supabase.from("notifications") as any).insert({
         user_id: selectedRequest.member_id,
         type: "contribution_approved",
         title: "Payment Approved",
-        message: `Your payment of KES ${selectedRequest.amount.toLocaleString()} for ${selectedRequest.payment_month} has been approved.`,
+        message: `Your payment of KES ${selectedRequest.amount.toLocaleString()} for ${selectedRequest.payment_month} has been approved and added to your savings.`,
       });
 
       toast({
         title: "Payment Approved",
-        description: `KES ${selectedRequest.amount.toLocaleString()} approved for ${selectedRequest.member_name}`,
+        description: `KES ${selectedRequest.amount.toLocaleString()} approved and added to ${selectedRequest.member_name}'s savings.`,
       });
 
       queryClient.invalidateQueries({ queryKey: ["payment-requests"] });
@@ -167,8 +160,7 @@ const PaymentApprovalsPanel = () => {
     setIsProcessing(true);
 
     try {
-      await supabase
-        .from("payment_requests")
+      await (supabase.from("payment_requests") as any)
         .update({
           status: "rejected",
           rejection_reason: rejectionReason,
@@ -177,8 +169,7 @@ const PaymentApprovalsPanel = () => {
         })
         .eq("id", selectedRequest.id);
 
-      // Create notification
-      await supabase.from("notifications").insert({
+      await (supabase.from("notifications") as any).insert({
         user_id: selectedRequest.member_id,
         type: "payment_rejected",
         title: "Payment Not Approved",
@@ -202,7 +193,6 @@ const PaymentApprovalsPanel = () => {
 
   return (
     <div className="space-y-8">
-      {/* Pending Payments */}
       <div>
         <div className="flex items-center gap-2 mb-4">
           <Clock className="w-5 h-5 text-warning" />
@@ -271,42 +261,11 @@ const PaymentApprovalsPanel = () => {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <Button
-                        onClick={() => handleApproveClick(request)}
-                        disabled={isProcessing}
-                        className="gap-2"
-                        size="sm"
-                      >
-                        {isProcessing ? (
-                          <>
-                            <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="w-4 h-4" />
-                            Approve
-                          </>
-                        )}
+                      <Button onClick={() => handleApproveClick(request)} disabled={isProcessing} className="gap-2" size="sm">
+                        <CheckCircle2 className="w-4 h-4" /> Approve
                       </Button>
-                      <Button
-                        onClick={() => handleRejectClick(request)}
-                        disabled={isProcessing}
-                        variant="destructive"
-                        size="sm"
-                        className="gap-2"
-                      >
-                        {isProcessing ? (
-                          <>
-                            <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="w-4 h-4" />
-                            Reject
-                          </>
-                        )}
+                      <Button onClick={() => handleRejectClick(request)} disabled={isProcessing} variant="destructive" size="sm" className="gap-2">
+                        <XCircle className="w-4 h-4" /> Reject
                       </Button>
                     </div>
                   </div>
@@ -317,7 +276,6 @@ const PaymentApprovalsPanel = () => {
         )}
       </div>
 
-      {/* Approved Payments */}
       {approvedRequests.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-4">
@@ -366,19 +324,8 @@ const PaymentApprovalsPanel = () => {
               />
             </div>
             <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setRejectionDialogOpen(false)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleReject}
-                disabled={isProcessing || !rejectionReason.trim()}
-                variant="destructive"
-                className="flex-1"
-              >
+              <Button variant="outline" onClick={() => setRejectionDialogOpen(false)} className="flex-1">Cancel</Button>
+              <Button onClick={handleReject} disabled={isProcessing || !rejectionReason.trim()} variant="destructive" className="flex-1">
                 {isProcessing ? "Rejecting..." : "Reject Payment"}
               </Button>
             </div>
@@ -417,19 +364,12 @@ const PaymentApprovalsPanel = () => {
                 )}
               </div>
             </div>
+            <p className="text-sm text-muted-foreground">
+              Approving will automatically add KES {selectedRequest?.amount.toLocaleString()} to the member's savings.
+            </p>
             <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setApprovalDialogOpen(false)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleApprove}
-                disabled={isProcessing}
-                className="flex-1"
-              >
+              <Button variant="outline" onClick={() => setApprovalDialogOpen(false)} className="flex-1">Cancel</Button>
+              <Button onClick={handleApprove} disabled={isProcessing} className="flex-1">
                 {isProcessing ? "Approving..." : "Approve Payment"}
               </Button>
             </div>

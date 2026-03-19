@@ -164,7 +164,7 @@ const PaymentSubmissionModal = ({
               placeholder="e.g., LN3C7D7CCCC"
               value={mpesaCode}
               onChange={(e) => setMpesaCode(e.target.value.toUpperCase())}
-              maxLength="15"
+              maxLength={15}
             />
             <p className="text-xs text-muted-foreground">The transaction confirmation code from your M-Pesa</p>
           </div>

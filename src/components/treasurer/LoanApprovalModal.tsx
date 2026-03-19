@@ -65,9 +65,11 @@ const LoanApprovalModal = ({ open, onOpenChange, loan, availableBalance, minimum
   const rule1_maxLoan = loan.member_savings * 5;
   const rule1_valid = Number(loan.amount) <= rule1_maxLoan;
   
-  const rule2_valid = loan.guarantors.length > 0 || Number(loan.amount) <= loan.member_savings * 0.8;
+  // Self-guaranteed loans have 0 guarantors but are valid
+  const isSelfGuaranteed = loan.guarantors.length === 0;
+  const rule2_valid = loan.guarantors.length > 0 || isSelfGuaranteed;
   
-  const rule3_valid = isGuaranteeValid && allGuarantorsValid;
+  const rule3_valid = isSelfGuaranteed || (isGuaranteeValid && allGuarantorsValid);
   
   const fee = parseFloat(processingFee) || 0;
   const disbursementAmount = deductFromLoan ? Number(loan.amount) - fee : Number(loan.amount);
