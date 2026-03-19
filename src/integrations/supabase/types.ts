@@ -171,11 +171,15 @@ export type Database = {
           interest_amount: number | null
           interest_rate: number
           member_id: string
+          monthly_payment: number | null
           processing_fee: number
           rejection_reason: string | null
           repaid_amount: number
+          repayment_months: number | null
           self_guaranteed: boolean | null
           status: Database["public"]["Enums"]["loan_status"]
+          total_cost: number | null
+          total_interest: number | null
           updated_at: string
         }
         Insert: {
@@ -188,11 +192,15 @@ export type Database = {
           interest_amount?: number | null
           interest_rate?: number
           member_id: string
+          monthly_payment?: number | null
           processing_fee?: number
           rejection_reason?: string | null
           repaid_amount?: number
+          repayment_months?: number | null
           self_guaranteed?: boolean | null
           status?: Database["public"]["Enums"]["loan_status"]
+          total_cost?: number | null
+          total_interest?: number | null
           updated_at?: string
         }
         Update: {
@@ -205,11 +213,15 @@ export type Database = {
           interest_amount?: number | null
           interest_rate?: number
           member_id?: string
+          monthly_payment?: number | null
           processing_fee?: number
           rejection_reason?: string | null
           repaid_amount?: number
+          repayment_months?: number | null
           self_guaranteed?: boolean | null
           status?: Database["public"]["Enums"]["loan_status"]
+          total_cost?: number | null
+          total_interest?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -428,6 +440,7 @@ export type Database = {
     Functions: {
       generate_membership_number: { Args: never; Returns: string }
       get_group_financials: { Args: never; Returns: Json }
+      get_member_savings: { Args: { _user_id: string }; Returns: number }
       get_user_status: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
@@ -462,6 +475,9 @@ export type Database = {
         | "contribution_recorded"
         | "member_approved"
         | "member_rejected"
+        | "contribution_approved"
+        | "payment_rejected"
+        | "contribution_submitted"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -610,6 +626,9 @@ export const Constants = {
         "contribution_recorded",
         "member_approved",
         "member_rejected",
+        "contribution_approved",
+        "payment_rejected",
+        "contribution_submitted",
       ],
     },
   },
