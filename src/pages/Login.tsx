@@ -134,7 +134,7 @@ const Login = () => {
         password,
         options: {
           data: {
-            display_name: displayName,
+            full_name: displayName,
           },
         },
       });
@@ -146,23 +146,11 @@ const Login = () => {
           variant: "destructive",
         });
       } else if (data?.user) {
-        // Create profile entry
-        await supabase.from("profiles").insert({
-          user_id: data.user.id,
-          display_name: displayName,
-          email,
-          status: "pending",
-        });
-
+        // Profile is auto-created by handle_new_user trigger
         toast({
-          title: "Success",
-          description: "Account created. Please check your email to confirm, then sign in.",
+          title: "Account Created",
+          description: "Welcome! Your account is pending admin approval.",
         });
-        setIsSignUp(false);
-        setEmail("");
-        setPassword("");
-        setDisplayName("");
-        setConfirmPassword("");
       }
     } catch (error) {
       toast({

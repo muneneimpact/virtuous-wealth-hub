@@ -115,6 +115,51 @@ export type Database = {
           },
         ]
       }
+      loan_requests: {
+        Row: {
+          amount: number
+          created_at: string | null
+          guarantor_ids: string[] | null
+          id: string
+          interest_rate: number | null
+          member_id: string
+          monthly_payment: number | null
+          repayment_months: number | null
+          status: string | null
+          total_cost: number | null
+          total_interest: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          guarantor_ids?: string[] | null
+          id?: string
+          interest_rate?: number | null
+          member_id: string
+          monthly_payment?: number | null
+          repayment_months?: number | null
+          status?: string | null
+          total_cost?: number | null
+          total_interest?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          guarantor_ids?: string[] | null
+          id?: string
+          interest_rate?: number | null
+          member_id?: string
+          monthly_payment?: number | null
+          repayment_months?: number | null
+          status?: string | null
+          total_cost?: number | null
+          total_interest?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       loans: {
         Row: {
           amount: number
@@ -123,12 +168,18 @@ export type Database = {
           deduct_fee_from_loan: boolean
           disbursement_date: string | null
           id: string
+          interest_amount: number | null
           interest_rate: number
           member_id: string
+          monthly_payment: number | null
           processing_fee: number
           rejection_reason: string | null
           repaid_amount: number
+          repayment_months: number | null
+          self_guaranteed: boolean | null
           status: Database["public"]["Enums"]["loan_status"]
+          total_cost: number | null
+          total_interest: number | null
           updated_at: string
         }
         Insert: {
@@ -138,12 +189,18 @@ export type Database = {
           deduct_fee_from_loan?: boolean
           disbursement_date?: string | null
           id?: string
+          interest_amount?: number | null
           interest_rate?: number
           member_id: string
+          monthly_payment?: number | null
           processing_fee?: number
           rejection_reason?: string | null
           repaid_amount?: number
+          repayment_months?: number | null
+          self_guaranteed?: boolean | null
           status?: Database["public"]["Enums"]["loan_status"]
+          total_cost?: number | null
+          total_interest?: number | null
           updated_at?: string
         }
         Update: {
@@ -153,12 +210,18 @@ export type Database = {
           deduct_fee_from_loan?: boolean
           disbursement_date?: string | null
           id?: string
+          interest_amount?: number | null
           interest_rate?: number
           member_id?: string
+          monthly_payment?: number | null
           processing_fee?: number
           rejection_reason?: string | null
           repaid_amount?: number
+          repayment_months?: number | null
+          self_guaranteed?: boolean | null
           status?: Database["public"]["Enums"]["loan_status"]
+          total_cost?: number | null
+          total_interest?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -196,6 +259,57 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_requests: {
+        Row: {
+          amount: number
+          id: string
+          member_id: string
+          mpesa_code: string | null
+          mpesa_message: string | null
+          notes: string | null
+          payment_date: string
+          payment_method: string | null
+          payment_month: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submitted_at: string
+        }
+        Insert: {
+          amount: number
+          id?: string
+          member_id: string
+          mpesa_code?: string | null
+          mpesa_message?: string | null
+          notes?: string | null
+          payment_date: string
+          payment_method?: string | null
+          payment_month: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string
+        }
+        Update: {
+          amount?: number
+          id?: string
+          member_id?: string
+          mpesa_code?: string | null
+          mpesa_message?: string | null
+          notes?: string | null
+          payment_date?: string
+          payment_method?: string | null
+          payment_month?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -205,6 +319,7 @@ export type Database = {
           id: string
           membership_number: string | null
           phone: string | null
+          savings: number | null
           status: string
           updated_at: string
           user_id: string
@@ -217,6 +332,7 @@ export type Database = {
           id?: string
           membership_number?: string | null
           phone?: string | null
+          savings?: number | null
           status?: string
           updated_at?: string
           user_id: string
@@ -229,6 +345,7 @@ export type Database = {
           id?: string
           membership_number?: string | null
           phone?: string | null
+          savings?: number | null
           status?: string
           updated_at?: string
           user_id?: string
@@ -323,6 +440,7 @@ export type Database = {
     Functions: {
       generate_membership_number: { Args: never; Returns: string }
       get_group_financials: { Args: never; Returns: Json }
+      get_member_savings: { Args: { _user_id: string }; Returns: number }
       get_user_status: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
@@ -357,6 +475,9 @@ export type Database = {
         | "contribution_recorded"
         | "member_approved"
         | "member_rejected"
+        | "contribution_approved"
+        | "payment_rejected"
+        | "contribution_submitted"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -505,6 +626,9 @@ export const Constants = {
         "contribution_recorded",
         "member_approved",
         "member_rejected",
+        "contribution_approved",
+        "payment_rejected",
+        "contribution_submitted",
       ],
     },
   },

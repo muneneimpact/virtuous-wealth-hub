@@ -52,7 +52,7 @@ const PaymentSubmissionModal = ({
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.from("payment_requests").insert({
+      const { error } = await (supabase.from("payment_requests") as any).insert({
         member_id: user!.id,
         amount: parsedAmount,
         payment_month: paymentMonth,
@@ -65,7 +65,7 @@ const PaymentSubmissionModal = ({
       if (error) throw error;
 
       // Create notification for treasurer
-      await supabase.from("notifications").insert({
+      await (supabase.from("notifications") as any).insert({
         user_id: user!.id,
         type: "contribution_submitted",
         title: "Payment Submitted",
@@ -164,7 +164,7 @@ const PaymentSubmissionModal = ({
               placeholder="e.g., LN3C7D7CCCC"
               value={mpesaCode}
               onChange={(e) => setMpesaCode(e.target.value.toUpperCase())}
-              maxLength="15"
+              maxLength={15}
             />
             <p className="text-xs text-muted-foreground">The transaction confirmation code from your M-Pesa</p>
           </div>
