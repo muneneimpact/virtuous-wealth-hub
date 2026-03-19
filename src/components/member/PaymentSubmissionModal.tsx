@@ -65,7 +65,7 @@ const PaymentSubmissionModal = ({
       if (error) throw error;
 
       // Create notification for treasurer
-      await supabase.from("notifications").insert({
+      await (supabase.from("notifications") as any).insert({
         user_id: user!.id,
         type: "contribution_submitted",
         title: "Payment Submitted",
