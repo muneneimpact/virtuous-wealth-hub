@@ -52,7 +52,7 @@ const PaymentSubmissionModal = ({
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.from("payment_requests").insert({
+      const { error } = await (supabase.from("payment_requests") as any).insert({
         member_id: user!.id,
         amount: parsedAmount,
         payment_month: paymentMonth,
