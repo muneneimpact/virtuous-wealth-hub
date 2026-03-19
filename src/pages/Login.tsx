@@ -134,7 +134,7 @@ const Login = () => {
         password,
         options: {
           data: {
-            display_name: displayName,
+            full_name: displayName,
           },
         },
       });
