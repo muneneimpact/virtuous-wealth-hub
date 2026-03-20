@@ -13,7 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  CheckCircle2, XCircle, Clock, User, Calendar, MessageSquare,
+  CheckCircle2, XCircle, Clock, User, Calendar, MessageSquare, CreditCard, PiggyBank, DollarSign,
 } from "lucide-react";
 
 interface PaymentRequest {
@@ -27,7 +27,26 @@ interface PaymentRequest {
   status: string;
   rejection_reason: string | null;
   submitted_at: string;
+  notes: string | null;
   member_name?: string;
+}
+
+interface PaymentNotes {
+  payment_type: "savings" | "loan_repayment" | "both";
+  total_amount: number;
+  loan_repayment_amount: number;
+  savings_amount: number;
+  loan_id: string | null;
+  description: string;
+}
+
+function parsePaymentNotes(notes: string | null): PaymentNotes | null {
+  if (!notes) return null;
+  try {
+    return JSON.parse(notes);
+  } catch {
+    return null;
+  }
 }
 
 const PaymentApprovalsPanel = () => {
@@ -83,6 +102,12 @@ const PaymentApprovalsPanel = () => {
     setIsProcessing(true);
 
     try {
+      const paymentInfo = parsePaymentNotes(selectedRequest.notes);
+      const loanRepayAmount = paymentInfo?.loan_repayment_amount || 0;
+      const savingsAmt = paymentInfo?.savings_amount || (loanRepayAmount > 0 ? selectedRequest.amount - loanRepayAmount : selectedRequest.amount);
+      const loanId = paymentInfo?.loan_id || null;
+
+      // 1. Mark payment as approved
       await (supabase.from("payment_requests") as any)
         .update({
           status: "approved",
@@ -91,50 +116,104 @@ const PaymentApprovalsPanel = () => {
         })
         .eq("id", selectedRequest.id);
 
-      // Record contribution
-      await supabase.from("contributions").insert({
-        member_id: selectedRequest.member_id,
-        amount: selectedRequest.amount,
-        month: selectedRequest.payment_month,
-        notes: `Payment approved - M-Pesa: ${selectedRequest.mpesa_code || "Message verified"}`,
-        recorded_by: user!.id,
-      });
+      // 2. Handle loan repayment portion
+      if (loanRepayAmount > 0 && loanId) {
+        // Get current loan data
+        const { data: loan } = await supabase
+          .from("loans")
+          .select("id, amount, repaid_amount, total_cost, status")
+          .eq("id", loanId)
+          .single();
 
-      // Update member's savings
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("user_id, savings")
-        .eq("user_id", selectedRequest.member_id)
-        .single();
+        if (loan && loan.status === "disbursed") {
+          const totalOwed = (loan.total_cost || loan.amount) - loan.repaid_amount;
+          const actualRepayment = Math.min(loanRepayAmount, totalOwed);
+          const newRepaid = loan.repaid_amount + actualRepayment;
+          const isFullyRepaid = newRepaid >= (loan.total_cost || loan.amount);
 
-      const currentSavings = (profile as any)?.savings || 0;
-      
-      await (supabase.from("profiles") as any)
-        .update({
-          savings: currentSavings + selectedRequest.amount,
-        })
-        .eq("user_id", selectedRequest.member_id);
+          await supabase
+            .from("loans")
+            .update({
+              repaid_amount: newRepaid,
+              status: isFullyRepaid ? "repaid" as any : "disbursed" as any,
+            })
+            .eq("id", loanId);
 
-      // Record transaction
-      await supabase.from("transactions").insert({
-        type: "contribution",
-        amount: selectedRequest.amount,
-        member_id: selectedRequest.member_id,
-        description: `Approved payment: KES ${selectedRequest.amount.toLocaleString()}`,
-        created_by: user!.id,
-      });
+          // Record loan repayment transaction
+          await supabase.from("transactions").insert({
+            type: "loan_repayment",
+            amount: actualRepayment,
+            member_id: selectedRequest.member_id,
+            description: `Loan repayment: KES ${actualRepayment.toLocaleString()} (M-Pesa: ${selectedRequest.mpesa_code || "verified"})${isFullyRepaid ? " — LOAN FULLY REPAID" : ""}`,
+            created_by: user!.id,
+            reference_id: loanId,
+          });
 
-      // Create notification
-      await (supabase.from("notifications") as any).insert({
-        user_id: selectedRequest.member_id,
-        type: "contribution_approved",
-        title: "Payment Approved",
-        message: `Your payment of KES ${selectedRequest.amount.toLocaleString()} for ${selectedRequest.payment_month} has been approved and added to your savings.`,
-      });
+          // Notify member about loan repayment
+          await (supabase.from("notifications") as any).insert({
+            user_id: selectedRequest.member_id,
+            type: "contribution_approved" as any,
+            title: isFullyRepaid ? "Loan Fully Repaid! 🎉" : "Loan Repayment Recorded",
+            message: isFullyRepaid 
+              ? `Congratulations! Your loan has been fully repaid. Final payment: KES ${actualRepayment.toLocaleString()}.`
+              : `Loan repayment of KES ${actualRepayment.toLocaleString()} recorded. Remaining balance: KES ${((loan.total_cost || loan.amount) - newRepaid).toLocaleString()}.`,
+          });
+        }
+      }
+
+      // 3. Handle savings portion
+      if (savingsAmt > 0) {
+        // Record contribution
+        await supabase.from("contributions").insert({
+          member_id: selectedRequest.member_id,
+          amount: savingsAmt,
+          month: selectedRequest.payment_month,
+          notes: `Payment approved - M-Pesa: ${selectedRequest.mpesa_code || "Message verified"}${loanRepayAmount > 0 ? ` (split: KES ${savingsAmt.toLocaleString()} savings)` : ""}`,
+          recorded_by: user!.id,
+        });
+
+        // Update member's savings
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("user_id, savings")
+          .eq("user_id", selectedRequest.member_id)
+          .single();
+
+        const currentSavings = (profile as any)?.savings || 0;
+        
+        await (supabase.from("profiles") as any)
+          .update({
+            savings: currentSavings + savingsAmt,
+          })
+          .eq("user_id", selectedRequest.member_id);
+
+        // Record savings transaction
+        await supabase.from("transactions").insert({
+          type: "contribution",
+          amount: savingsAmt,
+          member_id: selectedRequest.member_id,
+          description: `Savings contribution: KES ${savingsAmt.toLocaleString()}${loanRepayAmount > 0 ? " (from split payment)" : ""}`,
+          created_by: user!.id,
+        });
+
+        // Notify about savings
+        await (supabase.from("notifications") as any).insert({
+          user_id: selectedRequest.member_id,
+          type: "contribution_approved" as any,
+          title: "Payment Approved",
+          message: loanRepayAmount > 0 
+            ? `Split payment approved: KES ${savingsAmt.toLocaleString()} added to savings, KES ${loanRepayAmount.toLocaleString()} applied to loan.`
+            : `Your payment of KES ${savingsAmt.toLocaleString()} for ${selectedRequest.payment_month} has been approved and added to your savings.`,
+        });
+      }
+
+      const summaryParts: string[] = [];
+      if (savingsAmt > 0) summaryParts.push(`KES ${savingsAmt.toLocaleString()} → savings`);
+      if (loanRepayAmount > 0) summaryParts.push(`KES ${loanRepayAmount.toLocaleString()} → loan`);
 
       toast({
         title: "Payment Approved",
-        description: `KES ${selectedRequest.amount.toLocaleString()} approved and added to ${selectedRequest.member_name}'s savings.`,
+        description: `${selectedRequest.member_name}: ${summaryParts.join(", ")}`,
       });
 
       queryClient.invalidateQueries({ queryKey: ["payment-requests"] });
@@ -143,6 +222,7 @@ const PaymentApprovalsPanel = () => {
       queryClient.invalidateQueries({ queryKey: ["group-financials"] });
       queryClient.invalidateQueries({ queryKey: ["my-contributions"] });
       queryClient.invalidateQueries({ queryKey: ["member-financials"] });
+      queryClient.invalidateQueries({ queryKey: ["my-loans"] });
 
       setApprovalDialogOpen(false);
       setSelectedRequest(null);
@@ -171,7 +251,7 @@ const PaymentApprovalsPanel = () => {
 
       await (supabase.from("notifications") as any).insert({
         user_id: selectedRequest.member_id,
-        type: "payment_rejected",
+        type: "payment_rejected" as any,
         title: "Payment Not Approved",
         message: `Your payment of KES ${selectedRequest.amount.toLocaleString()} was not approved. Reason: ${rejectionReason}`,
       });
@@ -189,6 +269,25 @@ const PaymentApprovalsPanel = () => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     }
     setIsProcessing(false);
+  };
+
+  const renderPaymentTypeInfo = (request: PaymentRequest) => {
+    const info = parsePaymentNotes(request.notes);
+    if (!info) return null;
+    return (
+      <div className="flex flex-wrap gap-1.5 mt-2">
+        {info.savings_amount > 0 && (
+          <Badge variant="secondary" className="text-xs gap-1">
+            <PiggyBank className="w-3 h-3" /> Savings: KES {info.savings_amount.toLocaleString()}
+          </Badge>
+        )}
+        {info.loan_repayment_amount > 0 && (
+          <Badge variant="outline" className="text-xs gap-1">
+            <CreditCard className="w-3 h-3" /> Loan: KES {info.loan_repayment_amount.toLocaleString()}
+          </Badge>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -230,6 +329,8 @@ const PaymentApprovalsPanel = () => {
                           KES {request.amount.toLocaleString()}
                         </p>
                       </div>
+
+                      {renderPaymentTypeInfo(request)}
 
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                         <div>
@@ -293,6 +394,7 @@ const PaymentApprovalsPanel = () => {
                     <div>
                       <p className="font-medium text-sm">{request.member_name}</p>
                       <p className="text-xs text-muted-foreground">{request.payment_month}</p>
+                      {renderPaymentTypeInfo(request)}
                     </div>
                   </div>
                   <p className="font-semibold">KES {request.amount.toLocaleString()}</p>
@@ -346,26 +448,57 @@ const PaymentApprovalsPanel = () => {
             <div className="p-4 rounded-lg bg-success/10 border border-success/20">
               <p className="text-sm text-muted-foreground mb-2">Payment Details:</p>
               <div className="space-y-2 text-sm">
-                {selectedRequest && (
-                  <>
-                    <div className="flex justify-between">
-                      <span>Month:</span>
-                      <span className="font-semibold">{selectedRequest.payment_month}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Amount:</span>
-                      <span className="font-semibold">KES {selectedRequest.amount.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>M-Pesa Code:</span>
-                      <span className="font-mono">{selectedRequest.mpesa_code || "-"}</span>
-                    </div>
-                  </>
-                )}
+                {selectedRequest && (() => {
+                  const info = parsePaymentNotes(selectedRequest.notes);
+                  return (
+                    <>
+                      <div className="flex justify-between">
+                        <span>Month:</span>
+                        <span className="font-semibold">{selectedRequest.payment_month}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Total Amount:</span>
+                        <span className="font-semibold">KES {selectedRequest.amount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>M-Pesa Code:</span>
+                        <span className="font-mono">{selectedRequest.mpesa_code || "-"}</span>
+                      </div>
+                      {info && (
+                        <>
+                          <hr className="border-muted-foreground/20" />
+                          <p className="font-semibold text-xs text-muted-foreground">Breakdown:</p>
+                          {info.savings_amount > 0 && (
+                            <div className="flex justify-between">
+                              <span className="flex items-center gap-1"><PiggyBank className="w-3 h-3" /> Savings:</span>
+                              <span className="font-semibold text-green-700">KES {info.savings_amount.toLocaleString()}</span>
+                            </div>
+                          )}
+                          {info.loan_repayment_amount > 0 && (
+                            <div className="flex justify-between">
+                              <span className="flex items-center gap-1"><CreditCard className="w-3 h-3" /> Loan Repayment:</span>
+                              <span className="font-semibold text-blue-700">KES {info.loan_repayment_amount.toLocaleString()}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
             <p className="text-sm text-muted-foreground">
-              Approving will automatically add KES {selectedRequest?.amount.toLocaleString()} to the member's savings.
+              {(() => {
+                if (!selectedRequest) return "";
+                const info = parsePaymentNotes(selectedRequest.notes);
+                if (info && info.loan_repayment_amount > 0 && info.savings_amount > 0) {
+                  return `Approving will add KES ${info.savings_amount.toLocaleString()} to savings and apply KES ${info.loan_repayment_amount.toLocaleString()} to the loan.`;
+                }
+                if (info && info.loan_repayment_amount > 0) {
+                  return `Approving will apply KES ${info.loan_repayment_amount.toLocaleString()} to the member's loan repayment.`;
+                }
+                return `Approving will add KES ${selectedRequest.amount.toLocaleString()} to the member's savings.`;
+              })()}
             </p>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setApprovalDialogOpen(false)} className="flex-1">Cancel</Button>
