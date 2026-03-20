@@ -15,8 +15,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   getMemberFinancials,
   calculateSelfGuaranteeLimit,
-  validateGuarantorCapacity,
-  getBankBalance,
   createGuarantorNotification,
 } from "@/lib/loanCalculations";
 
@@ -24,7 +22,6 @@ interface GuarantorEntry {
   userId: string;
   name: string;
   membershipNumber: string;
-  savings: number;
   amount: string;
 }
 
@@ -58,13 +55,11 @@ const LoanRequestModal = ({
   const parsedAmount = parseFloat(loanAmount) || 0;
   const parsedMonths = parseInt(repaymentMonths) || 12;
   
-  // Calculate tiered interest rate
-  let tieredInterestRate = interestRate; // Default 5% monthly
+  let tieredInterestRate = interestRate;
   if (parsedMonths >= 6 && parsedAmount > 50000) {
-    tieredInterestRate = 1.5; // 18% per annum = 1.5% monthly
+    tieredInterestRate = 1.5;
   }
   
-  // Calculate total interest based on repayment months
   const estimatedInterest = (parsedAmount * tieredInterestRate * parsedMonths) / 100;
   const totalLoanCost = parsedAmount + estimatedInterest;
   const monthlyPayment = totalLoanCost / parsedMonths;
@@ -72,7 +67,6 @@ const LoanRequestModal = ({
   const totalGuarantee = guarantors.reduce((sum, g) => sum + (parseFloat(g.amount) || 0), 0);
   const isAmountValid = parsedAmount > 0 && parsedAmount <= maxLoanAmount;
 
-  // Load financial data and calculate self-guarantee eligibility
   useEffect(() => {
     if (!open || parsedAmount <= 0 || !user?.id) {
       setSelfGuaranteeLimit(0);
@@ -87,7 +81,7 @@ const LoanRequestModal = ({
         const financials = await getMemberFinancials(user.id);
         setInterestRate(financials.interestRate);
 
-        const { limit, isEligible, estimatedInterest: calculatedInterest } = 
+        const { limit, isEligible } = 
           calculateSelfGuaranteeLimit(
             financials.totalSavings,
             parsedAmount,
@@ -107,20 +101,10 @@ const LoanRequestModal = ({
     loadFinancials();
   }, [open, parsedAmount, user?.id]);
 
-  const guarantorValidations = useMemo(() => {
-    return guarantors.map((g) => {
-      const amt = parseFloat(g.amount) || 0;
-      // Updated validation: guarantor must have capacity for the amount
-      const capacity = Math.max(0, g.savings - (g.savings * 0.2)); // Simple capacity calc
-      return { ...g, valid: amt > 0 && amt <= g.savings, message: amt > g.savings ? "Exceeds savings" : "" };
-    });
-  }, [guarantors]);
-
-  const allGuarantorsValid = guarantorValidations.every((g) => g.valid || !(parseFloat(g.amount) > 0));
-  
-  // New validation logic based on self-guarantee rule
-  const isGuaranteeValid = isSelfGuaranteeEligible || (amountRequiringGuarantors <= totalGuarantee && amountRequiringGuarantors > 0);
-  const canSubmit = isAmountValid && isGuaranteeValid && allGuarantorsValid && !loadingFinancials;
+  // Simplified validation: each guarantor has amount > 0, total covers requirement
+  const allGuarantorsHaveAmount = guarantors.length === 0 || guarantors.every((g) => parseFloat(g.amount) > 0);
+  const isGuaranteeValid = isSelfGuaranteeEligible || (amountRequiringGuarantors > 0 && totalGuarantee >= amountRequiringGuarantors && allGuarantorsHaveAmount);
+  const canSubmit = isAmountValid && isGuaranteeValid && !loadingFinancials;
 
   const handleLookup = async () => {
     if (!lookupNumber.trim()) return;
@@ -147,43 +131,17 @@ const LoanRequestModal = ({
         return;
       }
 
-      // Get their savings using security definer RPC
-      const { data: savingsData } = await supabase.rpc("get_member_savings", {
-        _user_id: member.user_id,
-      });
-      const savings = Number(savingsData) || 0;
-
-      // Get existing guarantees
-      const { data: guaranteeData } = await supabase
-        .from("loan_guarantors")
-        .select("amount, status")
-        .eq("guarantor_id", member.user_id)
-        .in("status", ["pending", "accepted"]);
-      const existingGuarantees = (guaranteeData || []).reduce((sum, g) => sum + (g.amount || 0), 0);
-
-      // Get active loans
-      const { data: loansData } = await supabase
-        .from("loans")
-        .select("amount, repaid_amount")
-        .eq("member_id", member.user_id)
-        .in("status", ["approved", "disbursed"]);
-      const activeLoanBalance = (loansData || []).reduce((sum, l) => sum + ((l.amount || 0) - (l.repaid_amount || 0)), 0);
-
-      // Calculate available capacity
-      const availableCapacity = Math.max(0, savings - activeLoanBalance - existingGuarantees);
-
       setGuarantors((prev) => [
         ...prev,
         { 
           userId: member.user_id, 
           name: member.display_name, 
           membershipNumber: member.membership_number, 
-          savings: availableCapacity, 
           amount: "" 
         },
       ]);
       setLookupNumber("");
-      toast({ title: "Added", description: `${member.display_name} added as guarantor. Available capacity: KES ${availableCapacity.toLocaleString()}` });
+      toast({ title: "Added", description: `${member.display_name} added as guarantor.` });
     } catch (err: any) {
       toast({ title: "Error", description: err.message || "Failed to look up member.", variant: "destructive" });
     }
@@ -202,7 +160,6 @@ const LoanRequestModal = ({
     if (!user) return;
     setIsSubmitting(true);
     try {
-      // Create loan
       const loanStatus = isSelfGuaranteeEligible ? "pending_approval" : "pending_guarantors";
       const { data: loan, error: loanError } = await supabase
         .from("loans")
@@ -220,7 +177,6 @@ const LoanRequestModal = ({
         .single();
       if (loanError) throw loanError;
 
-      // Create guarantor entries only if needed
       if (!isSelfGuaranteeEligible && guarantors.length > 0) {
         const guarantorInserts = guarantors
           .filter((g) => parseFloat(g.amount) > 0)
@@ -232,7 +188,6 @@ const LoanRequestModal = ({
         const { error: gError } = await supabase.from("loan_guarantors").insert(guarantorInserts);
         if (gError) throw gError;
 
-        // Notify each guarantor
         const guarantorList = guarantors.filter((g) => parseFloat(g.amount) > 0);
         for (const guarantor of guarantorList) {
           await createGuarantorNotification(
@@ -421,47 +376,40 @@ const LoanRequestModal = ({
                 </Button>
               </div>
 
+              {/* Info about how it works */}
+              <Alert className="bg-muted/30 border-muted">
+                <Info className="w-4 h-4" />
+                <AlertDescription className="text-xs">
+                  Enter how much you'd like each guarantor to cover. They will receive your request and decide whether to accept based on their available capacity.
+                </AlertDescription>
+              </Alert>
+
               {/* Added guarantors */}
               <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
                 {guarantors.map((g) => {
-                  const v = guarantorValidations.find((v) => v.userId === g.userId);
                   const amt = parseFloat(g.amount) || 0;
-                  const isValid = amt > 0 && amt <= g.savings;
                   return (
-                    <div key={g.userId} className={`p-4 rounded-lg border transition-colors ${!isValid && amt > 0 ? "bg-red-50 border-red-300" : isValid && amt > 0 ? "bg-green-50 border-green-300" : "bg-muted/50"}`}>
+                    <div key={g.userId} className={`p-4 rounded-lg border transition-colors ${amt > 0 ? "bg-green-50 border-green-300" : "bg-muted/50"}`}>
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex-1">
                           <p className="font-semibold text-sm">{g.name}</p>
                           <p className="text-xs text-muted-foreground">Membership: #{g.membershipNumber}</p>
-                          <div className="mt-2 p-2 rounded bg-muted/50">
-                            <p className="text-xs text-muted-foreground mb-1">Available Capacity</p>
-                            <p className="font-display font-bold text-lg">KES {g.savings.toLocaleString()}</p>
-                          </div>
                         </div>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeGuarantor(g.userId)}>
                           <X className="w-4 h-4" />
                         </Button>
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-xs">Guarantee Amount (KES)</Label>
+                        <Label className="text-xs">Requested Amount (KES)</Label>
                         <div className="flex items-center gap-2">
                           <span className="text-sm text-muted-foreground">KES</span>
-                          <Input type="number" placeholder="0" value={g.amount} onChange={(e) => updateGuarantorAmount(g.userId, e.target.value)} className={`flex-1 text-lg font-semibold ${!isValid && amt > 0 ? "border-red-500 bg-red-50" : isValid && amt > 0 ? "border-green-500 bg-green-50" : ""}`} max={g.savings} />
+                          <Input type="number" placeholder="0" value={g.amount} onChange={(e) => updateGuarantorAmount(g.userId, e.target.value)} className={`flex-1 text-lg font-semibold ${amt > 0 ? "border-green-500 bg-green-50" : ""}`} />
                         </div>
                       </div>
                       {amt > 0 && (
                         <div className="mt-3 p-2 rounded-lg flex items-center gap-2">
-                          {isValid ? (
-                            <>
-                              <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
-                              <p className="text-xs text-green-700">Valid amount - within capacity</p>
-                            </>
-                          ) : (
-                            <>
-                              <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                              <p className="text-xs text-red-700">Exceeds capacity by KES {(amt - g.savings).toLocaleString()}</p>
-                            </>
-                          )}
+                          <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                          <p className="text-xs text-green-700">Will request KES {amt.toLocaleString()} from this guarantor</p>
                         </div>
                       )}
                     </div>
