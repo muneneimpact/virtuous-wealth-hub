@@ -103,9 +103,41 @@ const PaymentApprovalsPanel = () => {
 
     try {
       const paymentInfo = parsePaymentNotes(selectedRequest.notes);
-      const loanRepayAmount = paymentInfo?.loan_repayment_amount || 0;
-      const savingsAmt = paymentInfo?.savings_amount || (loanRepayAmount > 0 ? selectedRequest.amount - loanRepayAmount : selectedRequest.amount);
+      let loanRepayAmount = paymentInfo?.loan_repayment_amount || 0;
+      let savingsAmt = paymentInfo?.savings_amount || 0;
       const loanId = paymentInfo?.loan_id || null;
+
+      // If no structured notes, all goes to savings
+      if (!paymentInfo) {
+        savingsAmt = selectedRequest.amount;
+        loanRepayAmount = 0;
+      }
+
+      // Fetch the active loan to get accurate balance
+      let actualLoanBalance = 0;
+      let loanData: any = null;
+      if (loanId) {
+        const { data: loan } = await supabase
+          .from("loans")
+          .select("id, amount, repaid_amount, total_cost, status")
+          .eq("id", loanId)
+          .single();
+        loanData = loan;
+        if (loan && loan.status === "disbursed") {
+          actualLoanBalance = (loan.total_cost || loan.amount) - loan.repaid_amount;
+        }
+      }
+
+      // Cap loan repayment at actual balance - never overpay
+      if (loanRepayAmount > actualLoanBalance) {
+        // Excess goes to savings
+        const excess = loanRepayAmount - actualLoanBalance;
+        loanRepayAmount = actualLoanBalance;
+        savingsAmt += excess;
+      }
+
+      // If user chose "savings only" but has an active loan, check for scheduled payment
+      // (We don't auto-deduct here - respect the member's choice per the UI)
 
       // 1. Mark payment as approved
       await (supabase.from("payment_requests") as any)
@@ -117,48 +149,37 @@ const PaymentApprovalsPanel = () => {
         .eq("id", selectedRequest.id);
 
       // 2. Handle loan repayment portion
-      if (loanRepayAmount > 0 && loanId) {
-        // Get current loan data
-        const { data: loan } = await supabase
+      if (loanRepayAmount > 0 && loanData && loanData.status === "disbursed") {
+        const newRepaid = loanData.repaid_amount + loanRepayAmount;
+        const isFullyRepaid = newRepaid >= (loanData.total_cost || loanData.amount);
+
+        await supabase
           .from("loans")
-          .select("id, amount, repaid_amount, total_cost, status")
-          .eq("id", loanId)
-          .single();
+          .update({
+            repaid_amount: newRepaid,
+            status: isFullyRepaid ? "repaid" as any : "disbursed" as any,
+          })
+          .eq("id", loanData.id);
 
-        if (loan && loan.status === "disbursed") {
-          const totalOwed = (loan.total_cost || loan.amount) - loan.repaid_amount;
-          const actualRepayment = Math.min(loanRepayAmount, totalOwed);
-          const newRepaid = loan.repaid_amount + actualRepayment;
-          const isFullyRepaid = newRepaid >= (loan.total_cost || loan.amount);
+        // Record loan repayment transaction
+        await supabase.from("transactions").insert({
+          type: "loan_repayment",
+          amount: loanRepayAmount,
+          member_id: selectedRequest.member_id,
+          description: `Loan repayment: KES ${loanRepayAmount.toLocaleString()} (M-Pesa: ${selectedRequest.mpesa_code || "verified"})${isFullyRepaid ? " — LOAN FULLY REPAID" : ""}`,
+          created_by: user!.id,
+          reference_id: loanData.id,
+        });
 
-          await supabase
-            .from("loans")
-            .update({
-              repaid_amount: newRepaid,
-              status: isFullyRepaid ? "repaid" as any : "disbursed" as any,
-            })
-            .eq("id", loanId);
-
-          // Record loan repayment transaction
-          await supabase.from("transactions").insert({
-            type: "loan_repayment",
-            amount: actualRepayment,
-            member_id: selectedRequest.member_id,
-            description: `Loan repayment: KES ${actualRepayment.toLocaleString()} (M-Pesa: ${selectedRequest.mpesa_code || "verified"})${isFullyRepaid ? " — LOAN FULLY REPAID" : ""}`,
-            created_by: user!.id,
-            reference_id: loanId,
-          });
-
-          // Notify member about loan repayment
-          await (supabase.from("notifications") as any).insert({
-            user_id: selectedRequest.member_id,
-            type: "contribution_approved" as any,
-            title: isFullyRepaid ? "Loan Fully Repaid! 🎉" : "Loan Repayment Recorded",
-            message: isFullyRepaid 
-              ? `Congratulations! Your loan has been fully repaid. Final payment: KES ${actualRepayment.toLocaleString()}.`
-              : `Loan repayment of KES ${actualRepayment.toLocaleString()} recorded. Remaining balance: KES ${((loan.total_cost || loan.amount) - newRepaid).toLocaleString()}.`,
-          });
-        }
+        // Notify member about loan repayment
+        await (supabase.from("notifications") as any).insert({
+          user_id: selectedRequest.member_id,
+          type: "contribution_approved" as any,
+          title: isFullyRepaid ? "Loan Fully Repaid! 🎉" : "Loan Repayment Recorded",
+          message: isFullyRepaid 
+            ? `Congratulations! Your loan has been fully repaid. Final payment: KES ${loanRepayAmount.toLocaleString()}.`
+            : `Loan repayment of KES ${loanRepayAmount.toLocaleString()} recorded. Remaining balance: KES ${((loanData.total_cost || loanData.amount) - newRepaid).toLocaleString()}.`,
+        });
       }
 
       // 3. Handle savings portion

@@ -14,6 +14,7 @@ import TransactionHistory from "@/components/member/TransactionHistory";
 import PaymentHistory from "@/components/member/PaymentHistory";
 import MemberFinancialSummary from "@/components/member/MemberFinancialSummary";
 import LoanCalculator from "@/components/member/LoanCalculator";
+import LoanRepaymentSchedule from "@/components/member/LoanRepaymentSchedule";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,8 +56,11 @@ const MemberDashboard = () => {
   const gfTotalContributions = groupFinancials?.total_contributions || 0;
   const gfTotalLoansDisbursed = groupFinancials?.total_loans_disbursed || 0;
   const gfTotalOutstanding = groupFinancials?.total_loans_outstanding || 0;
+  const gfTotalInterestEarned = groupFinancials?.total_interest_earned || 0;
+  // Available = contributions - outstanding loans (repayments return to pool, not add new money)
   const availableBalance = gfTotalContributions - gfTotalOutstanding;
-  const totalExpected = gfTotalContributions + gfTotalOutstanding * 0.05;
+  // Expected = contributions + interest earned from loans (interest is the profit, not the repayment)
+  const totalExpected = gfTotalContributions + (gfTotalOutstanding * (interestRate / 100)) + gfTotalInterestEarned;
 
   return (
     <DashboardLayout
@@ -299,6 +303,11 @@ const MemberDashboard = () => {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Loan Repayment Schedule */}
+      <div className="mb-8">
+        <LoanRepaymentSchedule />
       </div>
 
       {/* Payment History */}

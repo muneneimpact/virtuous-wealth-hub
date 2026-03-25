@@ -71,13 +71,17 @@ const PaymentSubmissionModal = ({
   const parsedLoanRepayment = parseFloat(loanRepaymentAmount) || 0;
   const loanBalance = activeLoan ? (activeLoan.total_cost || activeLoan.amount) - activeLoan.repaid_amount : 0;
 
+  // Cap loan repayment at actual balance - never overpay the loan
+  const cappedLoanRepayment = Math.min(parsedLoanRepayment, loanBalance);
+  const cappedFullLoanRepayment = Math.min(parsedAmount, loanBalance);
+
   // Calculate how much goes where
-  const savingsAmount = paymentType === "loan_repayment" ? 0 
-    : paymentType === "both" ? Math.max(0, parsedAmount - parsedLoanRepayment) 
+  const savingsAmount = paymentType === "loan_repayment" ? Math.max(0, parsedAmount - cappedFullLoanRepayment)
+    : paymentType === "both" ? Math.max(0, parsedAmount - cappedLoanRepayment) 
     : parsedAmount;
   const loanAmount = paymentType === "savings" ? 0 
-    : paymentType === "both" ? Math.min(parsedLoanRepayment, parsedAmount, loanBalance) 
-    : Math.min(parsedAmount, loanBalance);
+    : paymentType === "both" ? cappedLoanRepayment
+    : cappedFullLoanRepayment;
 
   const handleSubmit = async () => {
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -290,6 +294,17 @@ const PaymentSubmissionModal = ({
                     <span>KES {parsedAmount.toLocaleString()}</span>
                   </div>
                 </div>
+                {/* Show cap warning */}
+                {paymentType === "loan_repayment" && parsedAmount > loanBalance && loanBalance > 0 && (
+                  <p className="text-xs text-warning mt-2">
+                    ⚠️ Loan balance is KES {loanBalance.toLocaleString()}. Only KES {loanAmount.toLocaleString()} will go to loan repayment, the rest (KES {savingsAmount.toLocaleString()}) will go to savings.
+                  </p>
+                )}
+                {paymentType === "both" && parsedLoanRepayment > loanBalance && (
+                  <p className="text-xs text-warning mt-2">
+                    ⚠️ Loan repayment capped at balance of KES {loanBalance.toLocaleString()}. Excess goes to savings.
+                  </p>
+                )}
               </AlertDescription>
             </Alert>
           )}
