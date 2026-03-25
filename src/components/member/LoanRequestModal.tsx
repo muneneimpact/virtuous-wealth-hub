@@ -55,6 +55,9 @@ const LoanRequestModal = ({
   const parsedAmount = parseFloat(loanAmount) || 0;
   const parsedMonths = parseInt(repaymentMonths) || 12;
   
+  // Block borrowing if active loan exists and loan balance >= savings
+  const hasBlockingLoan = currentLoanBalance > 0 && currentLoanBalance >= totalSavings;
+  
   let tieredInterestRate = interestRate;
   if (parsedMonths >= 6 && parsedAmount > 50000) {
     tieredInterestRate = 1.5;
