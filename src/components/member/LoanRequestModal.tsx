@@ -234,6 +234,22 @@ const LoanRequestModal = ({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Active Loan Blocking Warning */}
+          {hasBlockingLoan && (
+            <Alert className="bg-destructive/5 border-destructive/30">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-sm text-destructive">Cannot Borrow</p>
+                  <AlertDescription className="text-xs mt-1">
+                    You have an active loan of KES {currentLoanBalance.toLocaleString()} which is equal to or exceeds your savings of KES {totalSavings.toLocaleString()}. 
+                    Please repay your current loan before requesting a new one.
+                  </AlertDescription>
+                </div>
+              </div>
+            </Alert>
+          )}
+
           {/* Eligibility */}
           <div className="p-4 rounded-xl bg-accent/10 border border-accent/20">
             <div className="flex items-center gap-2 mb-3">
@@ -251,7 +267,7 @@ const LoanRequestModal = ({
               </div>
               <div>
                 <p className="text-muted-foreground">Current Loan</p>
-                <p className="font-semibold">KES {currentLoanBalance.toLocaleString()}</p>
+                <p className="font-semibold {currentLoanBalance > 0 ? "text-warning" : ""}">KES {currentLoanBalance.toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Available</p>
