@@ -254,8 +254,13 @@ const MemberDashboard = () => {
 
           {/* Loan Calculator */}
           <LoanCalculator />
+        </div>
+      </div>
 
-          {/* Member Financial Summary */}
+      {/* Loan Repayment Schedule */}
+      <div className="mb-8">
+        <LoanRepaymentSchedule />
+      </div>
           <MemberFinancialSummary loanAmount={0} />
 
           {/* Guarantorships */}
