@@ -254,13 +254,8 @@ const MemberDashboard = () => {
 
           {/* Loan Calculator */}
           <LoanCalculator />
-        </div>
-      </div>
 
-      {/* Loan Repayment Schedule */}
-      <div className="mb-8">
-        <LoanRepaymentSchedule />
-      </div>
+          {/* Member Financial Summary */}
           <MemberFinancialSummary loanAmount={0} />
 
           {/* Guarantorships */}
@@ -305,6 +300,11 @@ const MemberDashboard = () => {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Loan Repayment Schedule */}
+      <div className="mb-8">
+        <LoanRepaymentSchedule />
       </div>
 
       {/* Payment History */}
