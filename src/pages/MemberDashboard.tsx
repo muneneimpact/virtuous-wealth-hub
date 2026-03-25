@@ -56,8 +56,11 @@ const MemberDashboard = () => {
   const gfTotalContributions = groupFinancials?.total_contributions || 0;
   const gfTotalLoansDisbursed = groupFinancials?.total_loans_disbursed || 0;
   const gfTotalOutstanding = groupFinancials?.total_loans_outstanding || 0;
+  const gfTotalInterestEarned = groupFinancials?.total_interest_earned || 0;
+  // Available = contributions - outstanding loans (repayments return to pool, not add new money)
   const availableBalance = gfTotalContributions - gfTotalOutstanding;
-  const totalExpected = gfTotalContributions + gfTotalOutstanding * 0.05;
+  // Expected = contributions + interest earned from loans (interest is the profit, not the repayment)
+  const totalExpected = gfTotalContributions + (gfTotalOutstanding * (interestRate / 100)) + gfTotalInterestEarned;
 
   return (
     <DashboardLayout

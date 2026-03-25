@@ -26,6 +26,7 @@ export const useGroupFinancials = () =>
         total_loans_disbursed: number;
         total_loans_outstanding: number;
         total_repaid: number;
+        total_interest_earned: number;
         member_count: number;
       };
     },
