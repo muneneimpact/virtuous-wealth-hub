@@ -267,7 +267,7 @@ const LoanRequestModal = ({
               </div>
               <div>
                 <p className="text-muted-foreground">Current Loan</p>
-                <p className="font-semibold {currentLoanBalance > 0 ? "text-warning" : ""}">KES {currentLoanBalance.toLocaleString()}</p>
+                <p className={`font-semibold ${currentLoanBalance > 0 ? "text-warning" : ""}`}>KES {currentLoanBalance.toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Available</p>
