@@ -11,6 +11,7 @@ import LoanRequestModal from "@/components/member/LoanRequestModal";
 import GuarantorRequestsInbox from "@/components/member/GuarantorRequestsInbox";
 import PaymentSubmissionModal from "@/components/member/PaymentSubmissionModal";
 import TransactionHistory from "@/components/member/TransactionHistory";
+import PaymentHistory from "@/components/member/PaymentHistory";
 import MemberFinancialSummary from "@/components/member/MemberFinancialSummary";
 import LoanCalculator from "@/components/member/LoanCalculator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -298,6 +299,11 @@ const MemberDashboard = () => {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Payment History */}
+      <div className="mb-8">
+        <PaymentHistory />
       </div>
 
       {/* Transaction History Section */}
