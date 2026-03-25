@@ -301,6 +301,11 @@ const MemberDashboard = () => {
         </div>
       </div>
 
+      {/* Payment History */}
+      <div className="mb-8">
+        <PaymentHistory />
+      </div>
+
       {/* Transaction History Section */}
       <div className="mb-8">
         <TransactionHistory />
