@@ -226,6 +226,27 @@ export type Database = {
         }
         Relationships: []
       }
+      members: {
+        Row: {
+          loan_balance: number | null
+          member_id: number
+          name: string | null
+          savings_balance: number | null
+        }
+        Insert: {
+          loan_balance?: number | null
+          member_id?: number
+          name?: string | null
+          savings_balance?: number | null
+        }
+        Update: {
+          loan_balance?: number | null
+          member_id?: number
+          name?: string | null
+          savings_balance?: number | null
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -309,6 +330,35 @@ export type Database = {
           submitted_at?: string
         }
         Relationships: []
+      }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string | null
+          id: number
+          member_id: number | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          id?: number
+          member_id?: number | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          id?: number
+          member_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["member_id"]
+          },
+        ]
       }
       profiles: {
         Row: {
