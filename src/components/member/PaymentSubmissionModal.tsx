@@ -294,6 +294,17 @@ const PaymentSubmissionModal = ({
                     <span>KES {parsedAmount.toLocaleString()}</span>
                   </div>
                 </div>
+                {/* Show cap warning */}
+                {paymentType === "loan_repayment" && parsedAmount > loanBalance && loanBalance > 0 && (
+                  <p className="text-xs text-warning mt-2">
+                    ⚠️ Loan balance is KES {loanBalance.toLocaleString()}. Only KES {loanAmount.toLocaleString()} will go to loan repayment, the rest (KES {savingsAmount.toLocaleString()}) will go to savings.
+                  </p>
+                )}
+                {paymentType === "both" && parsedLoanRepayment > loanBalance && (
+                  <p className="text-xs text-warning mt-2">
+                    ⚠️ Loan repayment capped at balance of KES {loanBalance.toLocaleString()}. Excess goes to savings.
+                  </p>
+                )}
               </AlertDescription>
             </Alert>
           )}
