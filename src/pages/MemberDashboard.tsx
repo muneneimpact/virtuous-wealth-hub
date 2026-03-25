@@ -14,6 +14,7 @@ import TransactionHistory from "@/components/member/TransactionHistory";
 import PaymentHistory from "@/components/member/PaymentHistory";
 import MemberFinancialSummary from "@/components/member/MemberFinancialSummary";
 import LoanCalculator from "@/components/member/LoanCalculator";
+import LoanRepaymentSchedule from "@/components/member/LoanRepaymentSchedule";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
