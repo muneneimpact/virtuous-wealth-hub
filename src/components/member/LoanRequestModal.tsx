@@ -111,7 +111,7 @@ const LoanRequestModal = ({
   // Simplified validation: each guarantor has amount > 0, total covers requirement
   const allGuarantorsHaveAmount = guarantors.length === 0 || guarantors.every((g) => parseFloat(g.amount) > 0);
   const isGuaranteeValid = isSelfGuaranteeEligible || (amountRequiringGuarantors > 0 && totalGuarantee >= amountRequiringGuarantors && allGuarantorsHaveAmount);
-  const canSubmit = isAmountValid && isGuaranteeValid && !loadingFinancials && !hasBlockingLoan;
+  const canSubmit = isAmountValid && isGuaranteeValid && !loadingFinancials && !hasBlockingLoan && !hasReachedLoanLimit;
 
   const handleLookup = async () => {
     if (!lookupNumber.trim()) return;
