@@ -34,8 +34,10 @@ interface LoanRequestModalProps {
   totalLoansCount?: number;
 }
 
+const MAX_LOANS_ALLOWED = 3;
+
 const LoanRequestModal = ({
-  open, onOpenChange, maxLoanAmount, totalSavings, currentLoanBalance,
+  open, onOpenChange, maxLoanAmount, totalSavings, currentLoanBalance, totalLoansCount = 0,
 }: LoanRequestModalProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -58,6 +60,7 @@ const LoanRequestModal = ({
   
   // Block borrowing if active loan exists and loan balance >= savings
   const hasBlockingLoan = currentLoanBalance > 0 && currentLoanBalance >= totalSavings;
+  const hasReachedLoanLimit = totalLoansCount >= MAX_LOANS_ALLOWED;
   
   let tieredInterestRate = interestRate;
   if (parsedMonths >= 6 && parsedAmount > 50000) {
