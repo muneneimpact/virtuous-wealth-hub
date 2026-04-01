@@ -31,6 +31,7 @@ interface LoanRequestModalProps {
   maxLoanAmount: number;
   totalSavings: number;
   currentLoanBalance: number;
+  totalLoansCount?: number;
 }
 
 const LoanRequestModal = ({
