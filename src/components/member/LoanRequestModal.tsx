@@ -238,8 +238,23 @@ const LoanRequestModal = ({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Loan Limit Warning */}
+          {hasReachedLoanLimit && (
+            <Alert className="bg-destructive/5 border-destructive/30">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-sm text-destructive">Loan Limit Reached</p>
+                  <AlertDescription className="text-xs mt-1">
+                    You have reached the maximum of {MAX_LOANS_ALLOWED} loans. Please fully repay an existing loan before requesting a new one.
+                  </AlertDescription>
+                </div>
+              </div>
+            </Alert>
+          )}
+
           {/* Active Loan Blocking Warning */}
-          {hasBlockingLoan && (
+          {hasBlockingLoan && !hasReachedLoanLimit && (
             <Alert className="bg-destructive/5 border-destructive/30">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
