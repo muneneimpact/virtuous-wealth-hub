@@ -31,10 +31,13 @@ interface LoanRequestModalProps {
   maxLoanAmount: number;
   totalSavings: number;
   currentLoanBalance: number;
+  totalLoansCount?: number;
 }
 
+const MAX_LOANS_ALLOWED = 3;
+
 const LoanRequestModal = ({
-  open, onOpenChange, maxLoanAmount, totalSavings, currentLoanBalance,
+  open, onOpenChange, maxLoanAmount, totalSavings, currentLoanBalance, totalLoansCount = 0,
 }: LoanRequestModalProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -57,6 +60,7 @@ const LoanRequestModal = ({
   
   // Block borrowing if active loan exists and loan balance >= savings
   const hasBlockingLoan = currentLoanBalance > 0 && currentLoanBalance >= totalSavings;
+  const hasReachedLoanLimit = totalLoansCount >= MAX_LOANS_ALLOWED;
   
   let tieredInterestRate = interestRate;
   if (parsedMonths >= 6 && parsedAmount > 50000) {
@@ -107,7 +111,7 @@ const LoanRequestModal = ({
   // Simplified validation: each guarantor has amount > 0, total covers requirement
   const allGuarantorsHaveAmount = guarantors.length === 0 || guarantors.every((g) => parseFloat(g.amount) > 0);
   const isGuaranteeValid = isSelfGuaranteeEligible || (amountRequiringGuarantors > 0 && totalGuarantee >= amountRequiringGuarantors && allGuarantorsHaveAmount);
-  const canSubmit = isAmountValid && isGuaranteeValid && !loadingFinancials && !hasBlockingLoan;
+  const canSubmit = isAmountValid && isGuaranteeValid && !loadingFinancials && !hasBlockingLoan && !hasReachedLoanLimit;
 
   const handleLookup = async () => {
     if (!lookupNumber.trim()) return;
@@ -234,8 +238,23 @@ const LoanRequestModal = ({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Loan Limit Warning */}
+          {hasReachedLoanLimit && (
+            <Alert className="bg-destructive/5 border-destructive/30">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-sm text-destructive">Loan Limit Reached</p>
+                  <AlertDescription className="text-xs mt-1">
+                    You have reached the maximum of {MAX_LOANS_ALLOWED} loans. Please fully repay an existing loan before requesting a new one.
+                  </AlertDescription>
+                </div>
+              </div>
+            </Alert>
+          )}
+
           {/* Active Loan Blocking Warning */}
-          {hasBlockingLoan && (
+          {hasBlockingLoan && !hasReachedLoanLimit && (
             <Alert className="bg-destructive/5 border-destructive/30">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />

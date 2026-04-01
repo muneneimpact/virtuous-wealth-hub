@@ -96,8 +96,7 @@ export const useMyGuarantorRequests = () => {
       const { data: requests, error } = await supabase
         .from("loan_guarantors")
         .select("*")
-        .eq("guarantor_id", user!.id)
-        .eq("status", "pending");
+        .eq("guarantor_id", user!.id);
       if (error) throw error;
       if (!requests || requests.length === 0) return [];
 
