@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import {
   Wallet, Users, CreditCard, TrendingUp, AlertTriangle,
   Search, MoreHorizontal, ArrowUpRight, DollarSign, Download,
@@ -44,7 +44,7 @@ interface SelectedMember {
 }
 
 const TreasurerDashboard = () => {
-  const location = useLocation();
+  const { section } = useParams();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
@@ -60,7 +60,7 @@ const TreasurerDashboard = () => {
   const { data: recentTransactions = [] } = useAllTransactions();
   const { data: allContributions = [] } = useAllContributions();
 
-  const isSettingsPage = location.pathname === "/treasurer/settings";
+  const currentSection = section || "overview";
 
   const interestRate = settings?.interest_rate ? Number(settings.interest_rate) : 5;
   const investmentTarget = settings?.investment_target ? Number(settings.investment_target) : 5000000;
@@ -73,7 +73,6 @@ const TreasurerDashboard = () => {
   const totalExpected = gfTotal + gfOutstanding * 0.05;
   const totalArrears = memberFinancials.reduce((sum, m) => sum + m.arrears, 0);
 
-  // Monthly chart data from contributions
   const monthlyData = (() => {
     const months: Record<string, { contributions: number; loans: number }> = {};
     allContributions.forEach((c) => {
@@ -124,7 +123,7 @@ const TreasurerDashboard = () => {
     );
   };
 
-  if (isSettingsPage) {
+  if (currentSection === "settings") {
     return (
       <DashboardLayout title="Settings" subtitle="Configure investment targets and system settings" role="treasurer">
         <SettingsPanel />
@@ -132,9 +131,88 @@ const TreasurerDashboard = () => {
     );
   }
 
-  return (
-    <DashboardLayout title="Treasurer Dashboard" subtitle="Manage investments, loans, and member finances" role="treasurer">
-      <div className="mb-8">
+  const renderMembersTable = () => (
+    <Card variant="elevated">
+      <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <CardTitle className="text-base sm:text-lg">Members Overview</CardTitle>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="relative flex-1 sm:flex-none">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 w-full sm:w-64" />
+          </div>
+          <Button variant="outline" size="sm" onClick={exportContributions} className="shrink-0">
+            <Download className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Export</span>
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto -mx-6 px-6">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Member</TableHead>
+                <TableHead className="text-right">Savings</TableHead>
+                <TableHead className="text-right hidden sm:table-cell">Max Loan</TableHead>
+                <TableHead className="text-right hidden md:table-cell">Arrears</TableHead>
+                <TableHead className="text-right">Loan Bal.</TableHead>
+                <TableHead className="hidden sm:table-cell">Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredMembers.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No members found</TableCell></TableRow>
+              ) : (
+                filteredMembers.map((m) => (
+                  <TableRow key={m.id} className="hover:bg-muted/50">
+                    <TableCell>
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center font-semibold text-primary text-sm sm:text-base shrink-0">
+                          {m.display_name.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm sm:text-base truncate">{m.display_name}</p>
+                          <p className="text-xs text-muted-foreground font-mono">#{m.membership_number}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-sm">KES {m.totalInvested.toLocaleString()}</TableCell>
+                    <TableCell className="text-right text-accent font-semibold text-sm hidden sm:table-cell">KES {(m.totalInvested * 5).toLocaleString()}</TableCell>
+                    <TableCell className="text-right hidden md:table-cell">
+                      <span className={`text-sm ${m.arrears > 0 ? "text-destructive font-medium" : "text-success"}`}>
+                        {m.arrears > 0 ? `KES ${m.arrears.toLocaleString()}` : "None"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {m.loanBalance > 0 ? <span className="text-warning font-medium text-sm">KES {m.loanBalance.toLocaleString()}</span> : <span className="text-muted-foreground text-sm">None</span>}
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      <Badge variant={m.arrears > 0 ? "destructive" : "default"} className="capitalize text-xs">{m.arrears > 0 ? "arrears" : m.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="w-4 h-4" /></Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleOpenUpdateModal(m)}>Update Records</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const renderOverview = () => (
+    <>
+      <div className="mb-6 lg:mb-8">
         <FinancialOverview
           totalInvestments={gfTotal}
           totalLoansGiven={gfLoans}
@@ -145,27 +223,25 @@ const TreasurerDashboard = () => {
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 mb-8">
-        <StatsCard title="Total Funds" value={`KES ${(gfTotal / 1000).toFixed(0)}K`} subtitle="Collective investment" icon={Wallet} variant="gold" />
-        <StatsCard title="Active Members" value={String(groupFinancials?.member_count || 0)} subtitle="Contributing members" icon={Users} variant="default" />
-        <StatsCard title="Loans Outstanding" value={`KES ${(gfOutstanding / 1000).toFixed(0)}K`} subtitle={`@ ${interestRate}%/mo`} icon={CreditCard} variant="warning" />
-        <StatsCard title="Total Arrears" value={`KES ${(totalArrears / 1000).toFixed(0)}K`} subtitle="Pending collection" icon={AlertTriangle} variant={totalArrears > 0 ? "danger" : "success"} />
-        <StatsCard title="Pending Loans" value={pendingLoans.length.toString()} subtitle="Awaiting review" icon={TrendingUp} variant={pendingLoans.length > 0 ? "warning" : "success"} />
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 mb-6 lg:mb-8">
+        <StatsCard title="Total Funds" value={`KES ${(gfTotal / 1000).toFixed(0)}K`} subtitle="Collective" icon={Wallet} variant="gold" />
+        <StatsCard title="Members" value={String(groupFinancials?.member_count || 0)} subtitle="Active" icon={Users} variant="default" />
+        <StatsCard title="Outstanding" value={`KES ${(gfOutstanding / 1000).toFixed(0)}K`} subtitle={`@ ${interestRate}%/mo`} icon={CreditCard} variant="warning" />
+        <StatsCard title="Arrears" value={`KES ${(totalArrears / 1000).toFixed(0)}K`} subtitle="Pending" icon={AlertTriangle} variant={totalArrears > 0 ? "danger" : "success"} />
+        <StatsCard title="Pending Loans" value={pendingLoans.length.toString()} subtitle="To review" icon={TrendingUp} variant={pendingLoans.length > 0 ? "warning" : "success"} />
       </div>
 
       {pendingLoans.length > 0 && (
-        <div className="mb-8">
+        <div className="mb-6 lg:mb-8">
           <PendingLoanRequests requests={pendingLoans} onReviewRequest={handleReviewLoan} />
         </div>
       )}
 
-      <div className="grid lg:grid-cols-3 gap-8 mb-8">
+      <div className="grid lg:grid-cols-3 gap-6 lg:gap-8 mb-6 lg:mb-8">
         <Card variant="elevated" className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Monthly Overview</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base sm:text-lg">Monthly Overview</CardTitle></CardHeader>
           <CardContent>
-            <div className="h-[280px]">
+            <div className="h-[250px] sm:h-[280px]">
               {monthlyData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={monthlyData}>
@@ -190,23 +266,23 @@ const TreasurerDashboard = () => {
         </Card>
 
         <Card variant="elevated">
-          <CardHeader><CardTitle>Recent Activity</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base sm:text-lg">Recent Activity</CardTitle></CardHeader>
           <CardContent>
             {recentTransactions.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">No activity yet</p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3 max-h-[300px] overflow-y-auto">
                 {recentTransactions.slice(0, 5).map((t) => (
                   <div key={t.id} className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
-                    <div className={`p-2 rounded-lg ${Number(t.amount) > 0 ? "bg-success/10 text-success" : "bg-accent/10 text-accent"}`}>
+                    <div className={`p-2 rounded-lg shrink-0 ${Number(t.amount) > 0 ? "bg-success/10 text-success" : "bg-accent/10 text-accent"}`}>
                       {Number(t.amount) > 0 ? <ArrowUpRight className="w-4 h-4" /> : <DollarSign className="w-4 h-4" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm capitalize">{t.type.replace(/_/g, " ")}</p>
-                      <p className="text-xs text-muted-foreground">{(t as any).member_name || ""}</p>
+                      <p className="font-medium text-sm capitalize truncate">{t.type.replace(/_/g, " ")}</p>
+                      <p className="text-xs text-muted-foreground truncate">{(t as any).member_name || ""}</p>
                       <p className="text-xs text-muted-foreground">{new Date(t.created_at).toLocaleDateString("en-KE")}</p>
                     </div>
-                    <span className="text-sm font-semibold">KES {Math.abs(Number(t.amount)).toLocaleString()}</span>
+                    <span className="text-sm font-semibold shrink-0">KES {Math.abs(Number(t.amount)).toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -215,105 +291,64 @@ const TreasurerDashboard = () => {
         </Card>
       </div>
 
-      <div className="mb-8">
+      <div className="mb-6 lg:mb-8">
         <ProgressCard title="Investment Target Progress" current={gfTotal} target={investmentTarget} />
       </div>
+    </>
+  );
 
-      {/* Payment Approvals */}
-      <div className="mb-8">
-        <h2 className="font-display text-2xl font-semibold mb-4">Payment Verification</h2>
-        <PaymentApprovalsPanel />
-      </div>
-
-      <Card variant="elevated">
-        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
-          <CardTitle>Members Overview</CardTitle>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Search members..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 w-64" />
+  const renderContent = () => {
+    switch (currentSection) {
+      case "members": return renderMembersTable();
+      case "contributions":
+        return (
+          <div className="space-y-6">
+            <div className="mb-6"><PaymentApprovalsPanel /></div>
+            {renderMembersTable()}
+          </div>
+        );
+      case "loans":
+        return (
+          <div className="space-y-6">
+            {pendingLoans.length > 0 && (
+              <PendingLoanRequests requests={pendingLoans} onReviewRequest={handleReviewLoan} />
+            )}
+            {renderMembersTable()}
+          </div>
+        );
+      case "analytics":
+        return (
+          <div className="space-y-6">
+            <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
+              <StatsCard title="Total Funds" value={`KES ${gfTotal.toLocaleString()}`} subtitle="Collective" icon={Wallet} variant="gold" />
+              <StatsCard title="Outstanding" value={`KES ${gfOutstanding.toLocaleString()}`} subtitle="Loans" icon={CreditCard} variant="warning" />
+              <StatsCard title="Available" value={`KES ${availableBalance.toLocaleString()}`} subtitle="At bank" icon={TrendingUp} variant="success" />
+              <StatsCard title="Expected" value={`KES ${Math.round(totalExpected).toLocaleString()}`} subtitle="With interest" icon={DollarSign} variant="gold" />
             </div>
-            <Button variant="outline" size="sm" onClick={exportContributions}>
-              <Download className="w-4 h-4 mr-2" /> Export
-            </Button>
+            <ProgressCard title="Investment Target Progress" current={gfTotal} target={investmentTarget} />
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Member</TableHead>
-                  <TableHead className="text-right">Savings</TableHead>
-                  <TableHead className="text-right">Max Loan (5x)</TableHead>
-                  <TableHead className="text-right">Arrears</TableHead>
-                  <TableHead className="text-right">Loan Balance</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredMembers.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No members found</TableCell></TableRow>
-                ) : (
-                  filteredMembers.map((m) => (
-                    <TableRow key={m.id} className="hover:bg-muted/50">
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center font-semibold text-primary">
-                            {m.display_name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-medium">{m.display_name}</p>
-                            <p className="text-xs text-muted-foreground font-mono">#{m.membership_number}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-medium">KES {m.totalInvested.toLocaleString()}</TableCell>
-                      <TableCell className="text-right text-accent font-semibold">KES {(m.totalInvested * 5).toLocaleString()}</TableCell>
-                      <TableCell className="text-right">
-                        <span className={m.arrears > 0 ? "text-destructive font-medium" : "text-success"}>
-                          {m.arrears > 0 ? `KES ${m.arrears.toLocaleString()}` : "None"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {m.loanBalance > 0 ? <span className="text-warning font-medium">KES {m.loanBalance.toLocaleString()}</span> : <span className="text-muted-foreground">None</span>}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={m.arrears > 0 ? "destructive" : "default"} className="capitalize">{m.arrears > 0 ? "arrears" : m.status}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon"><MoreHorizontal className="w-4 h-4" /></Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleOpenUpdateModal(m)}>Update Records</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+        );
+      default: return renderOverview();
+    }
+  };
 
-      <MemberUpdateModal
-        open={updateModalOpen}
-        onOpenChange={setUpdateModalOpen}
-        member={selectedMember}
-      />
+  return (
+    <DashboardLayout title="Treasurer Dashboard" subtitle="Manage investments, loans, and member finances" role="treasurer">
+      {renderContent()}
 
-      <LoanApprovalModal
-        open={approvalModalOpen}
-        onOpenChange={setApprovalModalOpen}
-        loan={selectedLoan || null}
-        availableBalance={availableBalance}
-        minimumBalance={minimumBalance}
-      />
+      {/* Payment Approvals - show on overview */}
+      {currentSection === "overview" && (
+        <div className="mb-6 lg:mb-8">
+          <h2 className="font-display text-lg sm:text-2xl font-semibold mb-4">Payment Verification</h2>
+          <PaymentApprovalsPanel />
+        </div>
+      )}
+
+      {/* Members table on overview */}
+      {currentSection === "overview" && renderMembersTable()}
+
+      <MemberUpdateModal open={updateModalOpen} onOpenChange={setUpdateModalOpen} member={selectedMember} />
+      <LoanApprovalModal open={approvalModalOpen} onOpenChange={setApprovalModalOpen} loan={selectedLoan || null} availableBalance={availableBalance} minimumBalance={minimumBalance} />
     </DashboardLayout>
   );
 };
