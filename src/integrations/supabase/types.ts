@@ -499,6 +499,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_guarantor_of_loan: {
+        Args: { _loan_id: string; _user_id: string }
+        Returns: boolean
+      }
       lookup_member_by_number: {
         Args: { _membership_number: string }
         Returns: Json
